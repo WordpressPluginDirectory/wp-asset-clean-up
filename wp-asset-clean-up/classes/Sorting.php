@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 /**
@@ -16,10 +18,10 @@ class Sorting
 	 */
 	public static function sortListByAlpha($list)
 	{
-		if (isset($list['styles']) && ! empty($list['styles'])) {
+		if ( ! empty($list['styles']) ) {
 			$newStyles = array();
 
-			foreach ($list['styles'] as $indexNo => $styleObj) {
+			foreach ($list['styles'] as $styleObj) {
 				if (! isset($styleObj->handle)) {
 					continue;
 				}
@@ -42,10 +44,10 @@ class Sorting
 			sort($list['styles']);
 		}
 
-		if (isset($list['scripts']) && ! empty($list['scripts'])) {
+		if ( ! empty($list['scripts']) ) {
 			$newScripts = array();
 
-			foreach ($list['scripts'] as $indexNo => $scriptObj) {
+			foreach ($list['scripts'] as $scriptObj) {
 				if (! isset($scriptObj->handle)) {
 					continue;
 				}
@@ -80,102 +82,112 @@ class Sorting
 	 */
 	public static function appendLocation($list)
 	{
-		if (empty($list) || (! isset($list['styles']) && ! isset($list['scripts']))) {
-			return $list;
-		}
-
-		$pluginsUrl = plugins_url();
-
-		$urlsToThemeDirs = array();
-
-		foreach (search_theme_directories() as $themeDir => $themeDirArray) {
-			$themeUrl = '/'.
-	            str_replace(
-	                '//',
-		            '/',
-		            str_replace(Misc::getWpRootDirPath(), '', $themeDirArray['theme_root']) . '/'. $themeDir . '/'
-	            );
-
-			$urlsToThemeDirs[] = $themeUrl;
-		}
-
-		$urlsToThemeDirs = array_unique($urlsToThemeDirs);
-
 		foreach (array('styles', 'scripts') as $assetType) {
-			if ( ! (isset($list[$assetType]) && ! empty($list[$assetType])) ) {
+			if ( empty( $list[ $assetType ] ) ) {
 				continue;
 			}
 
 			foreach ( $list[$assetType] as $indexNo => $asset ) {
-				$src = isset($asset->src) ? $asset->src : '';
-				$miscLocalSrc = Misc::getLocalSrc($src);
-
-				if ($assetAlt = self::matchesWpCoreCriteria($asset, $assetType)) {
-					// Core Files
-					$asset->locationMain = 'wp_core';
-					$asset->locationChild = 'none';
-
-					if (isset($assetAlt->wp)) {
-						$asset->wp = true;
-					}
-
-					if (isset($assetAlt->ver)) {
-						$asset->ver = true;
-					}
-				} elseif ($pluginDir = self::matchesPluginCriteria($asset)) {
-					// From plugins directory (usually /wp-content/plugins/)
-					if ($pluginDir === 'n/a' && $src) {
-						if (strpos($src, '/'.Misc::getPluginsDir().'/') !== false) {
-							$srcParts = explode('/'.Misc::getPluginsDir().'/', $src);
-							list ($pluginDir) = explode('/', $srcParts[1]);
-						} else {
-							$relSrc = str_replace($pluginsUrl, '', $src);
-
-							if ($relSrc[0] === '/') {
-								$relSrc = substr($relSrc, 1);
-							}
-
-							list ($pluginDir) = explode('/', $relSrc);
-						}
-					}
-
-					$asset->locationMain  = 'plugins';
-					$asset->locationChild = $pluginDir;
-
-					} elseif ( (! empty($miscLocalSrc) && strpos($src, '/wp-content/uploads/') !== false) || strpos($src, '/wp-content/uploads/') === 0 ) {
-					$asset->locationMain  = 'uploads';
-					$asset->locationChild = 'none';
-				} else {
-					$isWithinThemes = false;
-
-					foreach ( $urlsToThemeDirs as $urlToThemeDir ) {
-						$srcRel = str_replace(site_url(),'', $src);
-
-						if ( strpos( $srcRel, $urlToThemeDir ) !== false ) {
-							$isWithinThemes = true;
-
-							$themeDir = substr(strrchr(trim($urlToThemeDir, '/'), '/'), 1);
-
-							$asset->locationMain  = 'themes';
-							$asset->locationChild = $themeDir;
-							break;
-							}
-					}
-
-					// Default: "External"
-					if ( ! $isWithinThemes ) {
-						// Outside "themes", "plugins" and "wp-includes"
-						$asset->locationMain  = 'external';
-						$asset->locationChild = 'none';
-						}
-				}
-
+				$asset = self::appendLocationToAsset($asset, $assetType);
 				$list[$assetType][$indexNo] = $asset;
 			}
 		}
 
 		return $list;
 	}
+
+    /**
+     * @param $asset object
+     * @param $assetType string
+     * @param string $forType ("enqueued": default, "hardcoded")
+     *
+     * @return object
+     */
+    public static function appendLocationToAsset($asset, $assetType, $forType = 'enqueued')
+    {
+        $src = isset($asset->src) ? $asset->src : '';
+        $miscLocalSrc = Misc::getLocalSrcIfExist($src);
+
+        if ($assetAlt = self::matchesWpCoreCriteria($asset, $assetType)) {
+            // Core Files
+            $asset->locationMain  = 'wp_core';
+            $asset->locationChild = 'none';
+
+            if (isset($assetAlt->wp)) {
+                $asset->wp = true;
+            }
+
+            if (isset($assetAlt->ver)) {
+                $asset->ver = true;
+            }
+        } elseif ($pluginDir = self::matchesPluginCriteria($asset)) {
+            // From plugins directory (usually /wp-content/plugins/)
+            if ($pluginDir === 'n/a' && $src) {
+                if (strpos($src, '/'.Misc::getPluginsDir().'/') !== false) {
+                    $srcParts = explode('/'.Misc::getPluginsDir().'/', $src);
+                    list ($pluginDir) = explode('/', $srcParts[1]);
+                } else {
+                    $relSrc = str_replace(plugins_url(), '', $src);
+
+                    if ($relSrc[0] === '/') {
+                        $relSrc = substr($relSrc, 1);
+                    }
+
+                    list ($pluginDir) = explode('/', $relSrc);
+                }
+            }
+
+            $asset->locationMain  = 'plugins';
+            $asset->locationChild = $pluginDir;
+
+            } elseif ( ( ! empty($miscLocalSrc) && strpos($src, '/wp-content/uploads/') !== false )
+                || strncmp($src, '/wp-content/uploads/', 20) === 0 ) {
+            $asset->locationMain  = 'uploads';
+            $asset->locationChild = 'none';
+        } else {
+            $isWithinThemes = false;
+
+            foreach (Misc::getUrlsToThemeDirs() as $urlToThemeDir) {
+                $srcRel = str_replace(site_url(), '', $src);
+
+                if (strpos($srcRel, $urlToThemeDir) !== false) {
+                    $isWithinThemes = true;
+
+                    $themeDir = substr(strrchr(trim($urlToThemeDir, '/'), '/'), 1);
+
+                    $asset->locationMain  = 'themes';
+                    $asset->locationChild = $themeDir;
+                    break;
+                    }
+            }
+
+            // Default: "External" for enqueued or "External", "Undetectable", etc. for hardcoded
+            if ( ! $isWithinThemes ) {
+                $asset->locationChild = 'none'; // at this stage, there's no "child" location
+
+                if ( $forType === 'enqueued' ) {
+                    // Outside "themes", "plugins" and "wp-includes"
+                    $asset->locationMain  = 'external';
+                    }
+
+                // Hardcoded assets often do not have something within them to detect the plugin/theme they are loading from
+                // Some of them will be added to a category such as "Miscellaneous"
+                if ( $forType === 'hardcoded' ) {
+                    if ($src) {
+                        if (Misc::isLocalSrc($src)) {
+                            $asset->locationMain = 'misc';
+                        } else {
+                            $asset->locationMain = 'external';
+                        }
+                    } else {
+                        $asset->locationMain  = 'other';
+                    }
+                }
+            }
+        }
+
+        return $asset;
+    }
 
 	/**
 	 * @param $asset
@@ -189,7 +201,7 @@ class Sorting
 
 		$src = isset($asset->src) ? $asset->src : '';
 
-		$localSrc = Misc::getLocalSrc($asset->src);
+		$localSrc = $src ? Misc::getLocalSrcIfExist($src) : '';
 
 		$srcToUse = $src;
 
@@ -198,13 +210,16 @@ class Sorting
 		}
 
 		$isJQueryHandle       = ($assetType === 'scripts') && in_array($asset->handle, array('jquery', 'jquery-core', 'jquery-migrate'));
-		$isJQueryUpdater      = ($assetType === 'scripts') && strpos($asset->src, '/' . Misc::getPluginsDir( 'dir_name' ) . '/jquery-updater/js/jquery-') !== false;
+		$isJQueryUpdater      = ($assetType === 'scripts' && $src !== '') && strpos($src, '/' . Misc::getPluginsDir( 'dir_name' ) . '/jquery-updater/js/jquery-') !== false;
 
-		$startsWithWpIncludes = strpos($srcToUse,'wp-includes/') === 0;
-		$startsWithWpAdmin    = strpos($srcToUse,'wp-admin/') === 0;
+		$startsWithWpIncludes = strncmp($srcToUse, 'wp-includes/', 12) === 0;
+		$startsWithWpAdmin    = strncmp($srcToUse, 'wp-admin/', 9) === 0;
 		$wpCoreOnJetpackCdn   = strpos($src, '.wp.com/c/'.$wp_version.'/wp-includes/') !== false;
 
 		$coreCssHandlesList = <<<LIST
+classic-theme-styles
+core-block-supports
+core-block-supports-duotone
 global-styles
 global-styles-css-custom-properties
 wp-block-directory
@@ -214,6 +229,7 @@ wp-block-library-theme
 wp-block-pattern
 wp-webfonts
 wp-block-post-date
+wp-emoji-styles
 LIST;
 		$cssCoreHandles = array_merge(
 			explode("\n", $coreCssHandlesList),
@@ -253,10 +269,15 @@ LIST;
 	{
 		$src = isset($asset->src) ? $asset->src : '';
 
+        // Hardcoded without "src"? It could match a specific pattern
+        if (! $src && (isset($asset->tag_output) && $tagBelongsToArray = HardcodedAssets::belongsTo($asset->tag_output))) {
+            return $tagBelongsToArray['dir'];
+        }
+
 		$isOxygenBuilderPlugin = strpos( $src, '/wp-content/uploads/oxygen/css/' ) !== false;
 		$isElementorPlugin     = strpos( $src, '/wp-content/uploads/elementor/css/' ) !== false;
 		$isWooCommerceInline   = $asset->handle === 'woocommerce-inline';
-		$miscLocalSrc          = Misc::getLocalSrc($src);
+		$miscLocalSrc          = Misc::getLocalSrcIfExist($src);
 
 		$isPlugin = $isOxygenBuilderPlugin ||
 		            $isElementorPlugin     ||
@@ -280,4 +301,42 @@ LIST;
 
 		return $pluginDir;
 	}
+
+    /**
+     * @param array $assetRows
+     * @@param bool $sortByKey
+     *
+     * @return array
+     */
+    public static function sortAreaAssetRowsValues($assetRowsValues, $sortByKey = true)
+    {
+        $newAssetRowsValues = $hiddenAssetRowsValues = array();
+
+        foreach ($assetRowsValues as $assetHandle => $assetRowOutputs) {
+            foreach ($assetRowOutputs as $assetTypeS => $assetRowOutput) {
+                if (strpos($assetRowOutput, 'wpacu_this_asset_row_area_is_hidden') === false) {
+                    $newAssetRowsValues[$assetHandle][$assetTypeS] = $assetRowOutput;
+                } else {
+                    $hiddenAssetRowsValues[$assetHandle][$assetTypeS] = $assetRowOutput; // build the hidden list to append to the final list below
+                }
+            }
+        }
+
+        if ($sortByKey) {
+            ksort($newAssetRowsValues);
+        }
+
+        // Sometimes, there are Core assets (TABLE TRs) that are printed as HTML, but are not shown (.wpacu_hide)
+        // Put them to the bottom of the list; This improves CSS matching the first visible row,
+        // as well as makes sure the background colors will always be alternative (one row after another)
+        if ( ! empty($hiddenAssetRowsValues) ) {
+            foreach ($hiddenAssetRowsValues as $hiddenAssetHandle => $hiddenAssetRowOutputs) {
+                foreach ($hiddenAssetRowOutputs as $hidenAssetTypeS => $hiddenAssetRowOutput) {
+                    $newAssetRowsValues[$hiddenAssetHandle][$hidenAssetTypeS] = $hiddenAssetRowOutput;
+                }
+            }
+        }
+
+        return $newAssetRowsValues;
+    }
 }

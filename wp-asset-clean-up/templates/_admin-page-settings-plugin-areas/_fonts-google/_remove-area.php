@@ -1,5 +1,4 @@
 <?php
-use WpAssetCleanUp\Misc;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 if (! isset($data)) {
@@ -12,7 +11,7 @@ if (! isset($data)) {
 			<label for="wpacu_google_fonts_remove"><?php _e('Remove Google Fonts', 'wp-asset-clean-up'); ?></label>
 		</th>
 		<td style="padding-bottom: 10px;">
-			<label class="wpacu_switch">
+			<label class="wpacu_switch wpacu_del_type">
 				<input id="wpacu_google_fonts_remove"
 				       type="checkbox"
 				       data-target-opacity="google_fonts_remove_wrap"
@@ -72,7 +71,7 @@ CSS;
     <p style="font-size: inherit; font-style: italic; margin-top: 0;"><small>* CDN requests for Web Font Loader from Google, Cloudflare and jsDelivr are detected and stripped.</small></p>
 
 	<p style="margin-bottom: 6px;"><strong style="border-bottom: 1px dotted black;">Is this solution working 100% for any website?</strong></p>
-	If you're already using "WebFontConfig" and it's hardcoded in your theme or one of the plugins, it's not easy to strip it via an universal pattern as its code can be scattered in various places and some attempts to strip it off might broke the JavaScript file that triggers it. Thus, in rare cases, you might have some traces left of Google Font requests and you'll need to strip that manually.
+	If you're already using "WebFontConfig" and it's hardcoded in your theme or one of the plugins, it's not easy to strip it via any universal pattern as its code can be scattered in various places, and some attempts to strip it off might break the JavaScript file that triggers it. Thus, in rare cases, you might have some traces left of Google Font requests, and you'll need to strip that manually.
 
-	<p style="margin-top: 10px; font-size: inherit;" class="wpacu-warning"><strong>Note:</strong> After you enable this option, any options from "Optimize Font Delivery" won't trigger anymore. If @import or @font-face matches are found in CSS files, the new updated files will be cached and stored in <strong>/<?php echo str_replace(Misc::getWpRootDirPath(), '', WP_CONTENT_DIR) . OptimizeCommon::getRelPathPluginCacheDir(); ?></strong>. The original files (from either plugins or the theme) won't be altered in any way.</p>
+	<p style="margin-top: 10px; font-size: inherit;" class="wpacu-warning"><strong>Note:</strong> After you enable this option, any options from "Optimize Font Delivery" won't trigger anymore. If @import or @font-face matches are found in CSS files, the new updated files will be cached and stored in <strong>/<?php echo str_replace(dirname(WP_CONTENT_DIR), '', WP_CONTENT_DIR) . OptimizeCommon::getRelPathPluginCacheDir(); ?></strong>. The original files (from either plugins or the theme) won't be altered in any way.</p>
 </div>

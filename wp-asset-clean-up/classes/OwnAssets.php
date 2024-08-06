@@ -1,20 +1,18 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 /**
  * Class OwnAssets
  *
- * These are plugin's own assets (CSS, JS etc.) and they are used only when you're logged in and do not show in the list for unload
+ * These are plugin's own assets (CSS, JS etc.),
+ * and they are used only when you're logged in and do not show in the list for unloading
  *
  * @package WpAssetCleanUp
  */
 class OwnAssets
 {
-    /**
-     * @var bool
-     */
-    public $loadPluginAssets = false; // default
-
 	/**
 	 * @var array[]
 	 */
@@ -106,11 +104,45 @@ class OwnAssets
 	    }
     }
 
-	/**
+    /**
+     * @return void
+     */
+    public static function adminChosenScriptInline()
+    {
+        // Only in specific plugin's pages
+        if ( ! (isset($_GET['page']) && $_GET['page'] && is_string($_GET['page']) && strpos($_GET['page'],
+                'wpassetcleanup_') !== false)) {
+            return;
+        }
+
+        // Only in "Settings" and "Plugins Manager" plugin pages
+        if ( ! in_array($_GET['page'], array('wpassetcleanup_settings', 'wpassetcleanup_plugins_manager'))) {
+            return;
+        }
+
+        $chosenScriptInline = <<<JS
+jQuery(document).ready(function($) {
+    $('.wpacu_chosen_select').each(function() {
+        /*
+        * Default
+         */
+        $('.wpacu_chosen_select').chosen();
+    });
+});
+JS;
+        wp_add_inline_script(OwnAssets::$ownAssets['scripts']['chosen']['handle'], $chosenScriptInline);
+    }
+
+    /**
 	 * @return array[]
-	 */
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public static function getOwnAssetsHandles($assetType = '')
     {
+        if ( ! current_user_can( 'administrator' ) ) {
+            return array();
+        }
+
         self::prepareVars();
 
 	    $allPluginStyleHandles = $allPluginScriptHandles = array();
@@ -151,206 +183,74 @@ class OwnAssets
 	    add_action('admin_footer', array($this, 'inlineAdminFooterCode'));
 
 	    // Code for both the Dashboard and the Front-end view
-	    add_action('admin_head',   array($this, 'inlineCode'));
-	    add_action('wp_head',      array($this, 'inlineCode'));
+	    add_action('admin_head',   array($this, 'inlineCodeHead'));
+	    add_action('wp_head',      array($this, 'inlineCodeHead'));
+
+        add_action('admin_footer',   array($this, 'inlineCodeFooter'), PHP_INT_MAX);
+        add_action('wp_footer',      array($this, 'inlineCodeFooter'), PHP_INT_MAX);
 
 	    // Rename ?ver= to ?wpacuversion to prevent other plugins from stripping "ver"
 	    // This is valid in the front-end and the Dashboard
 	    add_filter('script_loader_src', array($this, 'ownAssetLoaderSrc'), 10, 2);
 	    add_filter('style_loader_src',  array($this, 'ownAssetLoaderSrc'), 10, 2);
+
+        add_filter('style_loader_tag',  array($this, 'ownAssetLoaderTag'), 10, 2);
 	    add_filter('script_loader_tag', array($this, 'ownAssetLoaderTag'), 10, 2);
+    }
 
-	    add_filter('wpacu_object_data', static function($wpacu_object_data) {
-		    $wpacu_object_data['source_load_error_msg'] = __('The source might not be reachable', 'wp-asset-clean-up');
+    /**
+     * @return bool
+     */
+    public static function isPluginClearCacheLinkAccessible()
+    {
+        $isAdminWithClearCacheLink =   is_admin() && (Menu::isPluginPage() || (is_admin_bar_showing() && ! Main::instance()->settings['hide_from_admin_bar']));
+        $isFrontWithClearCacheLink = ! is_admin() && is_admin_bar_showing() && ! Main::instance()->settings['hide_from_admin_bar'];
 
-		    $wpacu_object_data['plugin_prefix']    = WPACU_PLUGIN_ID; // the same for both Lite & Pro
-		    $wpacu_object_data['plugin_slug']      = WPACU_PLUGIN_SLUG;
-		    $wpacu_object_data['plugin_title']     = WPACU_PLUGIN_TITLE;
-		    $wpacu_object_data['ajax_url']         = esc_url( admin_url( 'admin-ajax.php' ) );
-		    $wpacu_object_data['is_frontend_view'] = false;
-
-		    if ( isset($_GET['wpacu_manage_dash']) ) {
-			    $wpacu_object_data['force_manage_dash'] = true;
-            }
-
-		    // Current Page URL (for preloading) in the front-end view
-		    if (! is_admin()) {
-			    $wpacu_object_data['page_url'] = Misc::getCurrentPageUrl();
-			    $wpacu_object_data['is_frontend_view'] = true;
-		    }
-
-		    if (isset($wpacu_object_data['page_url']) && is_admin() && Misc::isHttpsSecure()) {
-			    $wpacu_object_data['page_url'] = str_replace('http://', 'https://', $wpacu_object_data['page_url']);
-		    }
-
-		    // Security nonces for AJAX calls
-		    $wpacu_object_data['wpacu_update_specific_settings_nonce'] = wp_create_nonce('wpacu_update_specific_settings_nonce');
-		    $wpacu_object_data['wpacu_update_asset_row_state_nonce'] = wp_create_nonce('wpacu_update_asset_row_state_nonce');
-		    $wpacu_object_data['wpacu_area_update_assets_row_state_nonce'] = wp_create_nonce('wpacu_area_update_assets_row_state_nonce');
-            $wpacu_object_data['wpacu_print_loaded_hardcoded_assets_nonce'] = wp_create_nonce('wpacu_print_loaded_hardcoded_assets_nonce');
-		    $wpacu_object_data['wpacu_ajax_check_remote_file_size_nonce'] = wp_create_nonce('wpacu_ajax_check_remote_file_size_nonce');
-            $wpacu_object_data['wpacu_ajax_check_external_urls_nonce'] = wp_create_nonce('wpacu_ajax_check_external_urls_nonce');
-		    $wpacu_object_data['wpacu_ajax_get_loaded_assets_nonce'] = wp_create_nonce('wpacu_ajax_get_loaded_assets_nonce');
-		    $wpacu_object_data['wpacu_ajax_load_page_restricted_area_nonce'] = wp_create_nonce('wpacu_ajax_load_page_restricted_area_nonce');
-		    $wpacu_object_data['wpacu_ajax_clear_cache_nonce'] = wp_create_nonce('wpacu_ajax_clear_cache_nonce');
-		    $wpacu_object_data['wpacu_ajax_preload_url_nonce'] = wp_create_nonce('wpacu_ajax_preload_url_nonce'); // After the CSS/JS manager's form is submitted (e.g. on an edit post/page)
-
-            $wpacu_object_data['jquery_unload_alert'] = 'jQuery library is a WordPress library that it is used in WordPress plugins/themes most of the time.'."\n\n".
-                                        'There are currently other JavaScript "children" files connected to it, that will stop working, if this library is unloaded'."\n\n".
-                                        'If you are positive this page does not require jQuery (very rare cases), then you can continue by pressing "OK"'."\n\n".
-                                        'Otherwise, it is strongly recommended to keep this library loaded by pressing "Cancel" to avoid breaking the functionality of the website.';
-            // js-cookie
-		    $wpacu_object_data['woo_js_cookie_unload_alert'] = 'Please be careful when unloading "js-cookie" as there are other JS files that depend on it which will also be unloaded, including "wc-cart-fragments" which is required for the functionality of the WooCommerce mini cart.'."\n\n".
-                                                        'Click "OK" to continue or "Cancel" if you have any doubts about unloading this file';
-
-		    // wc-cart-fragments
-		    $wpacu_object_data['woo_wc_cart_fragments_unload_alert'] = 'Please be careful when unloading "wc-cart-fragments" as it\'s required for the functionality of the WooCommerce mini cart. Unless you are sure you do not need it on this page, it is advisable to leave it loaded.'."\n\n".
-		                                                       'Click "OK" to continue or "Cancel" if you have any doubts about unloading this file.';
-
-            // backbone, underscore, etc.
-            $wpacu_object_data['sensitive_library_unload_alert'] = 'Please make sure to properly test this page after this particular JavaScript file is unloaded as it is usually loaded for a reason.'."\n\n".
-                                                   'If you are not sure whether it is used or not, then consider using the "Cancel" button to avoid taking ay chances in breaking the website\'s functionality.'."\n\n".
-                                                   'It is advised to check the browser\'s console via right-click and "Inspect" to check for any reported errors.';
-
-		    $wpacu_object_data['dashicons_unload_alert_ninja_forms'] = 'It looks like you are using "Ninja Forms" plugin which is sometimes loading Dashicons for the forms\' styling.'."\n\n".
-                                                   'If you are sure your forms do not use Dashicons, please use the following option \'Ignore dependency rule and keep the "children" loaded\' to avoid the unloading of the "nf-display" handle.'. "\n\n".
-                                                   'Click "OK" to continue or "Cancel" if you have any doubts about unloading the Dashicons. It is better to have Dashicons loaded, then take a chance and break the forms\' layout.';
-
-		    // After homepage/post/page is saved and the page is reloaded, clear the cache
-            // Cache clearing default values
-		    $wpacu_object_data['clear_cache_on_page_load'] = $wpacu_object_data['clear_other_caches'] = false; // default
-
-            /*
-             * [Start] Trigger plugin cache and other plugins'/system caches
-             */
-                // After editing post/page within the Dashboard
-                $unloadAssetsSubmit = (isset($_POST['wpacu_unload_assets_area_loaded']) && $_POST['wpacu_unload_assets_area_loaded']);
-
-                // After updating the CSS/JS manager within the front-end view (when "Manage in the front-end" is enabled)
-                $frontendViewPageAssetsJustUpdated = (! is_admin() && (isset($_GET['wpacu_time']) && $_GET['wpacu_time']) && get_transient('wpacu_page_just_updated'));
-
-                // After updating the "Settings" within the Dashboard
-                $pluginSettingsWithinDashboardJustUpdated = (is_admin() &&
-                 (Misc::getVar('request', 'page') === WPACU_PLUGIN_ID . '_settings') &&
-                 Misc::getVar('get', 'wpacu_selected_tab_area') &&
-                 get_transient('wpacu_settings_updated'));
-
-                if ($unloadAssetsSubmit || $frontendViewPageAssetsJustUpdated || $pluginSettingsWithinDashboardJustUpdated) {
-                    // Instruct the script to trigger clearing the cache via AJAX
-                    $wpacu_object_data['clear_cache_on_page_load'] = true;
-                }
-		    /*
-			 * [End] Trigger plugin cache and other plugins'/system caches
-			 */
-
-		    /*
-			 * [Start] Trigger ONLY other plugins'/system caches
-			 */
-                // When click the "Clear CSS/JS Files Cache" link within the Dashboard (e.g. toolbar or quick action areas)
-                // Cache was already cleared; Do not clear it again (save resources); Clear other caches
-                // Make sure the referrer (it needs to have one) is the same URI as the currently loaded one (without any extra parameters)
-		        $wpacuClearOtherCaches = false;
-                $wpacuReferrer         = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
-
-                if ($wpacuReferrer) {
-	                list(,$wpacuUriFromReferrer ) = explode('//' . parse_url($wpacuReferrer, PHP_URL_HOST), $wpacuReferrer);
-	                $wpacuRequestUri              = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
-	                $wpacuClearOtherCaches        = ($wpacuUriFromReferrer === $wpacuRequestUri);
-                }
-
-                if ($wpacuClearOtherCaches && get_transient('wpacu_clear_assets_cache_via_link')) {
-	                delete_transient('wpacu_clear_assets_cache_via_link');
-                    $wpacu_object_data['clear_other_caches'] = true;
-                }
-		    /*
-			 * [End] Trigger ONLY other plugins'/system caches
-			 */
-
-            $wpacu_object_data['server_returned_404_not_found'] = sprintf(
-                    __('When accessing this page the server responded with a status of %s404 (Not Found)%s. If this page is meant to return this status, you can ignore this message, otherwise you might have a problem with this page if it is meant to return a standard 200 OK status.', 'wp-asset-clean-up'),
-                    '<strong>',
-                    '</strong>'
-            );
-
-            /*
-             * Whether to clear Autoptimize Cache or not (if the plugin is enabled)
-             */
-            if ( ! Misc::isPluginActive('autoptimize/autoptimize.php') ) {
-	            $wpacu_object_data['autoptimize_not_active'] = 1;
-            } else {
-	            $wpacu_object_data['clear_autoptimize_cache'] = assetCleanUpClearAutoptimizeCache() ? 'true' : 'false';
-            }
-
-		    /*
-			 * Whether to clear "Cache Enabler" Cache or not (if the plugin is enabled)
-			 */
-		    if ( ! Misc::isPluginActive('cache-enabler/cache-enabler.php') ) {
-			    $wpacu_object_data['cache_enabler_not_active'] = 1;
-		    } else {
-			    $wpacu_object_data['clear_cache_enabler_cache'] = assetCleanUpClearCacheEnablerCache() ? 'true' : 'false';
-
-                if (assetCleanUpClearCacheEnablerCache()) {
-	                $wpacu_object_data['wpacu_ajax_clear_cache_enabler_cache_nonce'] = wp_create_nonce( 'wpacu_ajax_clear_cache_enabler_cache_nonce' );
-                }
-		    }
-
-		    return $wpacu_object_data;
-        });
+        return $isAdminWithClearCacheLink || $isFrontWithClearCacheLink;
     }
 
 	/**
-	 *
+	 * @return void
 	 */
-	public function inlineCode()
-	{
-		if ( ! is_admin_bar_showing() ) {
-		    return; // the code below is relevant only if the admin bar is shown
+	public function inlineCodeHead()
+    {
+	    if (wp_style_is(self::$ownAssets['styles']['style_core']['handle'])) {
+		    echo Misc::preloadAsyncCssFallbackOutput();
+	    }
+    }
+
+    /**
+     * @return void
+     */
+    public function inlineCodeFooter()
+    {
+        if (self::isPluginClearCacheLinkAccessible()) {
+            global $wp_styles, $wp_scripts;
+
+            if ( ! in_array(self::$ownAssets['styles']['style_core']['handle'], $wp_styles->done) ||
+                 ! in_array(self::$ownAssets['scripts']['script_core']['handle'], $wp_scripts->done) ) {
+                return;
+            }
+            ?>
+            <div id="wpacu-main-loading-spinner" class="wpacu_hide">
+                <div id="wpacu-main-loading-spinner-content">
+                    <div>
+                        <img src="<?php echo WPACU_PLUGIN_URL; ?>/assets/icons/loader-horizontal.svg" alt="" />
+                        <!-- Depending on the situation, the text will be shown from one of the DIVs below -->
+                        <div id="wpacu-main-loading-spinner-text"></div>
+
+                        <div data-wpacu-clear-cache-text="1" class="wpacu_hide">
+                            <?php esc_attr_e('Clearing CSS/JS assets\' cache'); ?>... <?php esc_attr_e('Please wait until this notice disappears'); ?>...
+                        </div>
+                        <div data-wpacu-updating-text="1" class="wpacu_hide">
+                            <?php _e('Updating'); ?>... <?php _e('Please wait'); ?>...
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php
         }
-        ?>
-        <style <?php echo Misc::getStyleTypeAttribute(); ?> data-wpacu-own-inline-style="true">
-            #wp-admin-bar-assetcleanup-asset-unload-rules-css-default,
-            #wp-admin-bar-assetcleanup-asset-unload-rules-js-default,
-            #wp-admin-bar-assetcleanup-plugin-unload-rules-notice-default {
-                overflow-y: auto;
-                max-height: calc(100vh - 250px);
-            }
-
-            #wp-admin-bar-assetcleanup-parent span.dashicons {
-                width: 15px;
-                height: 15px;
-                font-family: 'Dashicons', Arial, "Times New Roman", "Bitstream Charter", Times, serif !important;
-            }
-
-            #wp-admin-bar-assetcleanup-parent > a:first-child strong {
-                font-weight: bolder;
-                color: #76f203;
-            }
-
-            #wp-admin-bar-assetcleanup-parent > a:first-child:hover {
-                color: #00b9eb;
-            }
-
-            #wp-admin-bar-assetcleanup-parent > a:first-child:hover strong {
-                color: #00b9eb;
-            }
-
-            #wp-admin-bar-assetcleanup-test-mode-info {
-                margin-top: 5px !important;
-                margin-bottom: -8px !important;
-                padding-top: 3px !important;
-                border-top: 1px solid #ffffff52;
-            }
-
-            /* Add some spacing below the last text */
-            #wp-admin-bar-assetcleanup-test-mode-info-2 {
-                padding-bottom: 3px !important;
-            }
-        </style>
-        <?php
-        if (wp_style_is(self::$ownAssets['styles']['style_core']['handle'])) {
-            echo Misc::preloadAsyncCssFallbackOutput();
-        }
-	}
+    }
 
 	/**
 	 *
@@ -366,7 +266,7 @@ class OwnAssets
                 || (strpos(get_locale(), 'fr_') !== false)
                 || (strpos(get_locale(), 'de_') !== false);
 
-            if ( (! $applyDefaultStyleForCurrentLang) || Misc::isPluginActive('WPShapere/wpshapere.php') ) {
+            if ( (! $applyDefaultStyleForCurrentLang) || wpacuIsPluginActive('WPShapere/wpshapere.php') ) {
                 // This would also work well if the language is Arabic (the text shown right to left)
             ?>
                 /* Compatibility with "Wordpress Admin Theme - WPShapere" plugin - make sure Asset CleanUp's icon is not misaligned */
@@ -400,68 +300,6 @@ class OwnAssets
 	 */
 	public function inlineAdminFooterCode()
 	{
-		if (defined('WPACU_USE_MODAL_BOX') && WPACU_USE_MODAL_BOX === true) { ?>
-            <script type="text/javascript">
-                jQuery(document).ready(function ($) {
-                    /*
-					 * START WPACU MODAL
-					 */
-                    var wpacuCurrentModal, $wpacuModals = $('.wpacu-modal');
-
-                    if ($wpacuModals.length < 1) {
-                        return;
-                    }
-
-                    $wpacuModals.each(function (wpacuIndex) {
-                       var wpacuModalId = $(this).attr('id');
-                       var wpacuModal = document.getElementById(wpacuModalId);
-
-                        // Get the link/button that opens the modal
-
-                        if ($('#'+ wpacuModalId +'-target').length > 0) {
-                            var wpacuTargetById = document.getElementById(wpacuModalId + '-target');
-                            // When the user clicks the element with "id", open the modal
-                            wpacuTargetById.onclick = function () {
-                                wpacuModal.style.display = 'block';
-                                wpacuCurrentModal = wpacuModal;
-                            };
-                        }
-
-                        if ($('.'+ wpacuModalId +'-target').length > 0) {
-                            // When the user clicks the element with "class", open the modal
-                            $('.'+ wpacuModalId +'-target').each(function (wpacuIndex2) {
-                                // Get the link/button that opens the modal
-                                var wpacuTargetByClass = document.getElementsByClassName(wpacuModalId + '-target')[wpacuIndex2];
-
-                                wpacuTargetByClass.onclick = function () {
-                                    wpacuModal.style.display = 'block';
-                                    wpacuCurrentModal = wpacuModal;
-                                };
-                            });
-                        }
-
-                        // Get the <span> element that closes the modal
-                        var wpacuSpan = document.getElementsByClassName('wpacu-close')[wpacuIndex];
-
-                        // When the user clicks on <span> (x), close the modal
-                        wpacuSpan.onclick = function () {
-                            wpacuModal.style.display = 'none';
-                        };
-                    });
-
-                    // When the user clicks anywhere outside the modal, close it
-                    window.onclick = function (event) {
-                        if (event.target === wpacuCurrentModal) {
-                            wpacuCurrentModal.style.display = 'none';
-                        }
-                    };
-                    /*
-					 * END WPACU MODAL
-					 */
-                });
-            </script>
-		<?php }
-
 		if (isset($_GET['page']) && $_GET['page'] === WPACU_PLUGIN_ID.'_settings') {
 			// Only relevant in the "Settings" area
 			?>
@@ -484,50 +322,12 @@ class OwnAssets
      */
     public function stylesAndScriptsForAdmin()
     {
-		global $post, $pagenow;
-
 		if (! Menu::userCanManageAssets()) {
 			return;
 		}
 
-	    // Is the user inside the Dashboard (edit post/page mode)?
-	    // Could be post, page, custom post type (e.g. product, download)
-	    $getPostId = (isset($_GET['post'], $_GET['action']) && $_GET['action'] === 'edit' && $pagenow === 'post.php') ? (int)Misc::getVar('get', 'post') : '';
-
-	    if ($getPostId && ! Main::instance()->settings['show_assets_meta_box']) {
-		    // No point in loading the plugin JS if the management meta box is not shown
-		    return;
-	    }
-
-	    // Were the meta boxes hidden for particular post types?
-        // There's no point in showing any plugin's CSS/JS there
-	    if (isset($post->post_type) && in_array($post->post_type, MetaBoxes::hideMetaBoxesForPostTypes())) {
-		    return;
-	    }
-
-	    // This refers only to the Dashboard pages generated by the plugin
-		$page = Misc::getVar('get', 'page');
-
-		// Only load the plugin's assets when they are needed
-		// This an example of assets that are correctly loaded in WordPress
-		if (isset($post->ID)) {
-			$this->loadPluginAssets = true;
-		}
-
-		if ($getPostId > 0) {
-			$this->loadPluginAssets = true;
-		}
-
-		if (strpos($page, WPACU_PLUGIN_ID) === 0) {
-			$this->loadPluginAssets = true;
-		}
-
-		if (! $this->loadPluginAssets) {
-			return;
-		}
-
-		$this->enqueueAdminStyles();
-		$this->enqueueAdminScripts();
+        $this->_enqueueAdminStyles();
+		$this->_enqueueAdminScripts();
 	}
 
 	/**
@@ -545,13 +345,8 @@ class OwnAssets
 			return;
 		}
 
-		// If "Manage in the Front-end" option is not enabled in the plugin's "Settings", there's no point in loading the assets below
-		if (! Main::instance()->frontendShow()) {
-			return;
-		}
-
 	    // Do not load any CSS & JS belonging to Asset CleanUp if in "Elementor" preview
-	    if (Main::instance()->isFrontendEditView && isset($_GET['elementor-preview']) && $_GET['elementor-preview']) {
+	    if (isset($_GET['elementor-preview']) && $_GET['elementor-preview'] && Main::instance()->isFrontendEditView) {
 	        return;
 	    }
 
@@ -566,7 +361,7 @@ class OwnAssets
 	/**
 	 *
 	 */
-	private function enqueueAdminStyles()
+	private function _enqueueAdminStyles()
     {
         wp_enqueue_style(
             self::$ownAssets['styles']['style_core']['handle'],
@@ -578,164 +373,38 @@ class OwnAssets
 
 	/**
 	 *
-	 */
-	private function enqueueAdminScripts()
+     * @noinspection NestedAssignmentsUsageInspection
+     */
+	private function _enqueueAdminScripts()
     {
-		global $post, $pagenow;
+        $page = Misc::getVar('get', 'page');
+        $postIdRequested = isset( $_GET['wpacu_post_id'] ) && $_GET['wpacu_post_id'] ? (int)$_GET['wpacu_post_id'] : 0;
+        $pageRequestFor = Misc::getVar('get', 'wpacu_for');
 
-	    $postId = 0; // default
-		$page = Misc::getVar('get', 'page');
-	    $pageRequestFor = Misc::getVar('get', 'wpacu_for') ?: 'homepage';
+        if ( ! $pageRequestFor ) {
+            // e.g. /wp-admin/admin.php?page=wpassetcleanup_assets_manager&wpacu_post_id=17193 (no "wpacu_for" was mentioned)
+            if ($postIdRequested) {
+                $pageRequestFor = AssetsManagerAdmin::detectPostTypeTypeFromRequestedPostId($postIdRequested);
+            } else {
+                $pageRequestFor = 'homepage';
+            }
+        }
 
-	    // The admin is in a page such as /wp-admin/post.php?post=[POST_ID_HERE]&action=edit
-	    $isPostIdFromEditPostPage = (isset($_GET['post'], $_GET['action']) && $_GET['action'] === 'edit' && $pagenow === 'post.php') ? (int)$_GET['post'] : '';
-        $isDashAssetsManagerPage  = ($page === WPACU_PLUGIN_ID . '_assets_manager');
+	    $currentPostId = AssetsManager::getCurrentPostIdForCssJsManager($page, $pageRequestFor);
 
-        if ($isDashAssetsManagerPage) {
-	        if ( $pageRequestFor === 'homepage' ) {
-		        // Homepage tab / Check if the home page is one of the singular pages
-		        $pageOnFront = (int) get_option( 'page_on_front' );
-
-		        if ( $pageOnFront && $pageOnFront > 0 ) {
-			        $postId = $pageOnFront;
-		        }
-	        } elseif ( in_array( $pageRequestFor, array( 'posts', 'pages', 'custom-post-types', 'media-attachment' ) ) && isset( $_GET['wpacu_post_id'] ) && $_GET['wpacu_post_id'] ) {
-		        $postId = (int)Misc::getVar( 'get', 'wpacu_post_id' ) ?: 0;
-	        }
-        } else {
-		    $postId = isset($post->ID) ? $post->ID : 0;
-
-		    if ($isPostIdFromEditPostPage > 0 && $isPostIdFromEditPostPage !== $postId) {
-			    $postId = $isPostIdFromEditPostPage;
-		    }
-	    }
-
-	    wp_register_script(
+        wp_register_script(
 	        self::$ownAssets['scripts']['script_core']['handle'],
             plugins_url(self::$ownAssets['scripts']['script_core']['rel_path'], WPACU_PLUGIN_FILE),
             array('jquery'),
             self::assetVer(self::$ownAssets['scripts']['script_core']['rel_path'])
         );
 
-	    if ($postId > 0)  {
-		    // It can also be the front page URL
-		    $pageUrl = Misc::getPageUrl($postId);
-	    } else {
-		    $pageUrl = Misc::getPageUrl(0);
-	    }
-
-	    $svgReloadIcon = <<<HTML
-<svg aria-hidden="true" role="img" focusable="false" class="dashicon dashicons-cloud" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M14.9 9c1.8.2 3.1 1.7 3.1 3.5 0 1.9-1.6 3.5-3.5 3.5h-10C2.6 16 1 14.4 1 12.5 1 10.7 2.3 9.3 4.1 9 4 8.9 4 8.7 4 8.5 4 7.1 5.1 6 6.5 6c.3 0 .7.1.9.2C8.1 4.9 9.4 4 11 4c2.2 0 4 1.8 4 4 0 .4-.1.7-.1 1z"></path></svg>
-HTML;
-
-	    // If the post status is 'private' only direct method can be used to fetch the assets
-	    // as the remote post one will return a 404 error since the page is accessed as a guest visitor
-        $postStatus      = $postId > 0 ? get_post_status($postId) : false;
-        $wpacuDomGetType = ($postStatus === 'private') ? 'direct' : Main::$domGetType;
-
-		$wpacuObjectData = array(
-			'plugin_prefix'     => WPACU_PLUGIN_ID, // the same for both Lite & Pro
-			'plugin_slug'       => WPACU_PLUGIN_SLUG,
-
-			'reload_icon'       => $svgReloadIcon,
-			'reload_msg'        => sprintf(__('Reloading %s area', 'wp-asset-clean-up'), '<strong style="margin: 0 4px;">' . WPACU_PLUGIN_TITLE . '</strong>'),
-			'dom_get_type'      => $wpacuDomGetType,
-			'list_show_status'  => Main::instance()->settings['assets_list_show_status'],
-
-            'start_del_e'       => Main::START_DEL_ENQUEUED,
-			'end_del_e'         => Main::END_DEL_ENQUEUED,
-
-            'start_del_h'       => Main::START_DEL_HARDCODED,
-            'end_del_h'         => Main::END_DEL_HARDCODED,
-
-			'ajax_url'          => esc_url(admin_url('admin-ajax.php')),
-			'post_id'           => $postId, // if any
-			'page_url'          => $pageUrl // post, page, custom post type, homepage etc.
-		);
-
-	    // Assets List Show Status only applies for edit post/page/custom post type/category/custom taxonomy
-	    // Dashboard pages such as "Homepage" from plugin's "CSS/JavaScript Load Manager" will fetch the list on load
-	    $wpacuObjectData['override_assets_list_load'] = false;
-
-	    if ($page === WPACU_PLUGIN_ID.'_assets_manager' && in_array($pageRequestFor, array('homepage', 'pages', 'posts', 'custom-post-types', 'media-attachment'))) {
-		    $wpacuObjectData['override_assets_list_load'] = true;
-	    }
-
-		// [wpacu_lite]
-		$submitTicketLink = 'https://wordpress.org/support/plugin/wp-asset-clean-up';
-		// [/wpacu_lite]
-
-        $wpacuObjectData['ajax_direct_fetch_error'] = <<<HTML
-<div class="ajax-direct-call-error-area">
-    <p class="note"><strong>Note:</strong> The checked URL returned an error when fetching the assets via AJAX call. This could be because of a firewall that is blocking the AJAX call, a redirect loop or an error in the script that is retrieving the output which could be due to an incompatibility between the plugin and the WordPress setup you are using.</p>
-    <p>Here is the response from the call:</p>
-
-    <table>
-        <tr>
-            <td width="135"><strong>Status Code Error:</strong></td>
-            <td><span class="error-code">{wpacu_status_code_error}</span> * for more information about client and server errors, <a target="_blank" href="https://en.wikipedia.org/wiki/List_of_HTTP_status_codes">check this link</a></td>
-        </tr>
-        <tr>
-            <td valign="top"><span class="dashicons dashicons-lightbulb" style="color: orange;"></span> <strong>Suggestion:</strong></td>
-            <td>Select "WP Remote Post" as a method of retrieving the assets from the "Settings" page. If that doesn't fix the issue, just use "Manage in Front-end" option which should always work and <a target="_blank" href="{$submitTicketLink}">submit a ticket</a> about your problem.</td>
-        </tr>
-        <tr>
-            <td valign="top"><strong>Output:</strong></td>
-            <td valign="top">{wpacu_output}</td>
-        </tr>
-    </table>
-</div>
-HTML;
-
-        // Sometimes, 200 OK (success) is returned, but due to an issue with the page, the assets list is not retrieved
-	    $wpacuObjectData['ajax_direct_fetch_error_with_success_response'] = <<<HTML
-<div style="overflow-y: scroll; max-height: 290px;" class="ajax-direct-call-error-area">
-    <p class="note"><strong>Note:</strong> The assets could not be fetched via the AJAX call. Here is the response:</p>
-    <table>
-        <tr>
-            <td valign="top"><strong>Suggestion:</strong></td>
-            <td>Select "WP Remote Post" as a method of retrieving the assets from the "Settings" page. If that doesn't fix the issue, just use "Manage in Front-end" option which should always work and <a target="_blank" href="{$submitTicketLink}">submit a ticket</a> about your problem.</td>
-        </tr>
-        <tr>
-            <td valign="top"><strong>Output:</strong></td>
-            <td valign="top">{wpacu_output}</td>
-        </tr>
-    </table>
-</div>
-HTML;
-
-	    $wpacuObjectData['jquery_migration_disable_confirm_msg'] =
-		    __('Make sure to properly test your website if you unload the jQuery migration library.', 'wp-asset-clean-up')."\n\n".
-		    __('In some cases, due to old jQuery code triggered from plugins or the theme, unloading this migration library could cause those scripts not to function anymore and break some of the front-end functionality.', 'wp-asset-clean-up')."\n\n".
-		    __('If you are not sure about whether activating this option is right or not, it is better to leave it as it is (to be loaded by default) and consult with a developer.', 'wp-asset-clean-up')."\n\n".
-		    __('Confirm this action to enable the unloading or cancel to leave it loaded by default.', 'wp-asset-clean-up');
-
-	    $wpacuObjectData['comment_reply_disable_confirm_msg'] =
-		    __('This is worth disabling if you are NOT using the default WordPress comment system (e.g. you are using the website for business purposes, to showcase your products and you are not using it as a blog where people leave comments to your posts).', 'wp-asset-clean-up')."\n\n".
-		    __('If you are not sure about whether activating this option is right or not, it is better to leave it as it is (to be loaded by default).', 'wp-asset-clean-up')."\n\n".
-		    __('Confirm this action to enable the unloading or cancel to leave it loaded by default.', 'wp-asset-clean-up');
-
-	    // "Tools" - "Reset"
-	    $wpacuObjectData['reset_settings_confirm_msg'] =
-		    __('Are you sure you want to reset the settings to their default values?', 'wp-asset-clean-up')."\n\n".
-		    __('This is an irreversible action.', 'wp-asset-clean-up')."\n\n".
-		    __('Please confirm to continue or "Cancel" to abort it', 'wp-asset-clean-up');
-
-	    $wpacuObjectData['reset_everything_except_settings_confirm_msg'] =
-		    __('Are you sure you want to reset everything (unloads, load exceptions etc.) except settings?', 'wp-asset-clean-up')."\n\n".
-		    __('This is an irreversible action.', 'wp-asset-clean-up')."\n\n".
-		    __('Please confirm to continue or "Cancel" to abort it.', 'wp-asset-clean-up');
-
-	    $wpacuObjectData['reset_everything_confirm_msg'] =
-		    __('Are you sure you want to reset everything (settings, unloads, load exceptions etc.) to the same point it was when you first activated the plugin?', 'wp-asset-clean-up')."\n\n".
-            __('This is an irreversible action.', 'wp-asset-clean-up')."\n\n".
-            __('Please confirm to continue or "Cancel" to abort it.', 'wp-asset-clean-up');
-
-	    // "Tools" - "Import & Export"
-	    $wpacuObjectData['import_confirm_msg'] =
-            __('This process is NOT reversible.', 'wp-asset-clean-up')."\n\n".
-            __('Please make sure you have a backup (e.g. an exported JSON file) before proceeding.', 'wp-asset-clean-up')."\n\n".
-            __('Please confirm to continue or "Cancel" to abort it.', 'wp-asset-clean-up');
+        $dataForObject = array(
+            'post_id'          => $currentPostId,
+            'page'             => $page,
+            'page_request_for' => $pageRequestFor
+        );
+        $wpacuObjectData = self::generateObjectData($dataForObject);
 
         wp_localize_script(
 	        self::$ownAssets['scripts']['script_core']['handle'],
@@ -758,8 +427,8 @@ HTML;
                               'homepage',
                               'pages',
                               'posts',
-                              'custom-post-types',
-                              'media-attachment'
+                              'custom_post_types',
+                              'media_attachment'
                           ) ) ) );
         }
 
@@ -772,7 +441,7 @@ HTML;
 		    $this->loadjQueryChosen();
         }
 
-        if ($isEditPostArea || ($page === WPACU_PLUGIN_ID . '_assets_manager')) {
+        if ($isEditPostArea || in_array($page, array(WPACU_PLUGIN_ID . '_assets_manager', WPACU_PLUGIN_ID . '_plugins_manager'))) {
 			// [Start] SweetAlert
 			wp_enqueue_style(
 				self::$ownAssets['styles']['sweetalert2']['handle'],
@@ -788,9 +457,17 @@ HTML;
                     z-index: 1000000;
                 }
 
-                .wpacu-swal2-popup {
-                    width: 36em !important;
+                /* [wpacu_lite] */
+                body.wp-admin.post-php .swal2-popup.swal2-modal,
+                body.wp-admin.asset-cleanup_page_wpassetcleanup_assets_manager .swal2-popup.swal2-modal {
+                    padding: 1.25em 1.25em 2em 1.25em;
                 }
+
+                body.wp-admin.post-php #swal2-content,
+                body.asset-cleanup_page_wpassetcleanup_assets_manager #swal2-content {
+                    line-height: 30px;
+                }
+                /* [/wpacu_lite] */
 
 				.wpacu-swal2-overlay {
 					z-index: 10000000;
@@ -851,7 +528,8 @@ jQuery(document).ready(function($) {
             icon: "info",
             showCancelButton: true,
             confirmButtonText: 'Upgrade to the Pro version',
-            cancelButtonText: 'Maybe later'
+            cancelButtonText: 'Maybe later',
+            width: '600px'
         }).then((result) => {
             if (result.isConfirmed) {
               window.location.replace("{$upgradeToProLinkHardcodedAssets}");
@@ -868,7 +546,8 @@ jQuery(document).ready(function($) {
             icon: "info",
             showCancelButton: true,
             confirmButtonText: 'Upgrade to the Pro version',
-            cancelButtonText: 'Maybe later'
+            cancelButtonText: 'Maybe later',
+            width: '600px'
         }).then((result) => {
             if (result.isConfirmed) {
               window.location.replace("{$upgradeToProLinkMediaQueryLoad}");
@@ -907,6 +586,322 @@ JS;
 			wp_add_inline_script(self::$ownAssets['scripts']['tooltipster']['handle'], $tooltipsterScriptInline);
 			// [End] Tooltipster Script
         }
+
+        /*
+         * [START] Critical CSS
+         */
+        if (isset($_GET['page'], $_GET['wpacu_sub_page']) &&
+            $_GET['page'] === WPACU_PLUGIN_ID . '_assets_manager' &&
+            $_GET['wpacu_sub_page'] === 'manage_critical_css') {
+            wp_enqueue_script( 'wp-theme-plugin-editor' );
+            wp_enqueue_style( 'wp-codemirror' );
+
+            $cm_settings = array();
+            $cm_settings['codeEditor'] = wp_enqueue_code_editor( array( 'type' => 'text/css' ) );
+            $customPagesInlineJS = ''; // only fills if the "Custom Pages" tab is used
+
+            if (isset($_GET['wpacu_for']) && $_GET['wpacu_for'] === 'custom-pages') {
+                $cm_settings_custom_pages = array();
+                $cm_settings_custom_pages['codeEditor'] = wp_enqueue_code_editor( array( 'type' => 'text/x-php' ) );
+                wp_localize_script( 'jquery', 'wpacu_cm_settings_custom_pages', $cm_settings_custom_pages );
+
+                $customPagesInlineJS = <<<JS
+// Custom Pages
+wp.codeEditor.initialize($('#wpacu-php-editor-textarea'), wpacu_cm_settings_custom_pages);
+JS;
+            }
+
+            wp_localize_script( 'jquery', 'wpacu_cm_settings', $cm_settings );
+
+            $wpacuCodeMirrorInlineScript = <<<JS
+jQuery(document).ready(function($) {
+  // Editable CSS
+  var wpacuEditor = wp.codeEditor.initialize($('#wpacu-css-editor-textarea'), wpacu_cm_settings);
+  
+  {$customPagesInlineJS}
+  
+  $(document).on('change', '#wpacu_critical_css_status', function() {
+      var \$wpacuTargetElement     = $('#wpacu-critical-css-options-area'),
+          \$wpacuTargetTabMenuItem = $('#wpacu-critical-css-manager-tab-menu').find('.wpacu-nav-tab-active > .wpacu-circle-status'),
+          wpacuAnyCustomPageType   = $(this).attr('data-wpacu-custom-page-type');
+      
+      if ($(this).prop('checked')) {
+          \$wpacuTargetElement.removeClass('wpacu-faded');
+          
+          if (wpacuAnyCustomPageType !== '') {
+              $('.wpacu-circle-status[data-wpacu-custom-page-type="'+ wpacuAnyCustomPageType +'"]')
+                .removeClass('wpacu-off').addClass('wpacu-on');
+          }
+          
+          \$wpacuTargetTabMenuItem.removeClass('wpacu-off').addClass('wpacu-on');
+      } else {
+          \$wpacuTargetElement.addClass('wpacu-faded');
+          
+          if (wpacuAnyCustomPageType !== '') {
+              $('.wpacu-circle-status[data-wpacu-custom-page-type="'+ wpacuAnyCustomPageType +'"]')
+                .removeClass('wpacu-on').addClass('wpacu-off');
+          }
+          
+          /* In case there are any other custom post types with critical CSS enabled, then keep the green circle for the "Custom Posty Types" main tab */
+          if ($('#wpacu_custom_pages_nav_links').find('.wpacu-circle-status.wpacu-on').length === 0) {
+              \$wpacuTargetTabMenuItem.removeClass('wpacu-on').addClass('wpacu-off');
+          }
+      }
+  });
+  
+  $(document).on('submit', '#wpacu-critical-css-form', function() {
+      if (wpacuEditor.codemirror.getValue() === '' && $('#wpacu_critical_css_status').prop('checked')) {
+          alert('You have chosen to activate the critical CSS. You need to provide the CSS content before submitting this form.');
+          return false;
+      }
+      
+      $('#wpacu-updating-critical-css').addClass('wpacu-show').removeClass('wpacu-hide');
+      $('#wpacu-update-critical-css-button-area').find('.button').prop('disabled', true).attr('value', 'UPDATING...');
+  });
+})
+JS;
+            $wpacuCodeMirrorInlineStyle = <<<CSS
+.CodeMirror {
+  border: 1px solid #ddd;
+}
+
+/* "CSS & JS Manager" -- "Manage Critical CSS" -- "Custom Pages" */
+#wpacu-critical-css-custom-pages .CodeMirror {
+    height: auto;
+}
+
+#wpacu-critical-css-options-area.wpacu-faded {
+    opacity: 0.4;
+}
+
+#wpacu-css-editor-textarea {
+    width: 100%;
+    min-height: 600px;
+}
+
+#wpacu-update-critical-css-button-area {
+    display: inline-block;
+    margin: 14px 0 0 0;
+}
+
+#wpacu-update-critical-css-button-area input {
+    padding: 5px 18px;
+    height: 45px;
+    font-size: 15px;
+}
+
+#wpacu-updating-critical-css.wpacu-hide {
+    display: none;
+}
+
+#wpacu-updating-critical-css.wpacu-show {
+    display: inline-block;
+    margin: 13px 0 0 8px;
+}
+CSS;
+            wp_add_inline_script('wp-theme-plugin-editor', $wpacuCodeMirrorInlineScript);
+            wp_add_inline_style('wp-codemirror', $wpacuCodeMirrorInlineStyle);
+        }
+        /*
+         * [END] Critical CSS
+         */
+    }
+
+    /**
+     * @param array $data
+     *
+     * @return array
+     * @noinspection NestedAssignmentsUsageInspection
+     */
+    public static function generateObjectData($data = array())
+    {
+        if ( isset($data['post_id']) ) {
+            $postId = $data['post_id'];
+        } else {
+            // If 'post_id' is not set, then it's a front-end view
+            $postId = Main::instance()->getCurrentPostId();
+        }
+
+        if (is_admin()) {
+            // Dashboard View
+            if (self::checkForFetchUrlInDashboardView()) {
+                // e.g. edit category page (where the CSS/JS manager is loading)
+                $pageUrl = self::getFetchUrlDashboardView($postId);
+
+                if ($pageUrl && Misc::isHttpsSecure()) {
+                    $pageUrl = str_replace('http://', 'https://', $pageUrl);
+                }
+            } else {
+                // The cache is cleared most likely outside the CSS/JS manager
+                // e.g. after a theme switch
+                $pageUrl = site_url(); // get main website URL
+            }
+        } else {
+            // Front-end view
+            // Get the post ID if not is set (it will be '0' if not a singular page)
+            $pageUrl = Misc::getCurrentPageUrl();
+        }
+
+        // If the post status is 'private' only direct method can be used to fetch the assets
+        // as the remote post one will return a 404 error since the page is accessed as a guest visitor
+        $postStatus      = $postId > 0 ? get_post_status($postId) : false;
+        $wpacuDomGetType = ($postStatus === 'private') ? 'direct' : Main::$domGetType;
+
+        $svgReloadIcon = <<<HTML
+<svg aria-hidden="true" role="img" focusable="false" class="dashicon dashicons-cloud" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M14.9 9c1.8.2 3.1 1.7 3.1 3.5 0 1.9-1.6 3.5-3.5 3.5h-10C2.6 16 1 14.4 1 12.5 1 10.7 2.3 9.3 4.1 9 4 8.9 4 8.7 4 8.5 4 7.1 5.1 6 6.5 6c.3 0 .7.1.9.2C8.1 4.9 9.4 4 11 4c2.2 0 4 1.8 4 4 0 .4-.1.7-.1 1z"></path></svg>
+HTML;
+
+        $wpacuObjectData = array(
+            'plugin_prefix'    => WPACU_PLUGIN_ID, // the same for both Lite & Pro
+            'plugin_slug'      => WPACU_PLUGIN_SLUG,
+            'plugin_title'     => WPACU_PLUGIN_TITLE,
+
+            'reload_icon'      => $svgReloadIcon,
+            'reload_msg'       => sprintf(__('Reloading %s area', 'wp-asset-clean-up'), '<strong style="margin: 0 4px;">' . WPACU_PLUGIN_TITLE . '</strong>'),
+            'dom_get_type'     => $wpacuDomGetType,
+            'list_show_status' => Main::instance()->settings['assets_list_show_status'],
+
+            'start_del_e'      => Main::START_DEL_ENQUEUED,
+            'end_del_e'        => Main::END_DEL_ENQUEUED,
+
+            'start_del_h'      => Main::START_DEL_HARDCODED,
+            'end_del_h'        => Main::END_DEL_HARDCODED,
+
+            'post_id'          => $postId, // if any
+            'ajax_url'         => esc_url( admin_url( 'admin-ajax.php' ) ),
+            'page_url'         => $pageUrl // post, page, custom post type, homepage etc.
+        );
+
+        if ( ! is_admin() ) {
+            $wpacuObjectData['is_frontend_view'] = true;
+        } else {
+            // Assets' List Show Status only applies for edit post/page/custom post type/category/custom taxonomy
+            // Dashboard pages such as "Homepage" from plugin's "CSS/JavaScript Load Manager" will fetch the list on loading
+            if ($data['page'] === WPACU_PLUGIN_ID.'_assets_manager' && in_array($data['page_request_for'], array('homepage', 'pages', 'posts', 'custom_post_types', 'media_attachment'))) {
+                $wpacuObjectData['override_assets_list_load'] = true;
+            }
+
+            if ( isset($_GET['wpacu_manage_dash']) ) {
+                $wpacuObjectData['force_manage_dash'] = true;
+            }
+
+            if (get_transient(WPACU_PLUGIN_ID.'_clear_assets_cache')) {
+                $wpacuObjectData['clear_cache'] = true;
+                delete_transient(WPACU_PLUGIN_ID.'_clear_assets_cache');
+            }
+        }
+
+        $wpacuObjectData['source_load_error_msg'] = __('The source might not be reachable', 'wp-asset-clean-up');
+
+        $wpacuObjectData['current_post_type'] = false;
+
+        if ( $postId > 0 ) {
+            $wpacuObjectData['current_post_type']                    = get_post_type($postId);
+            $wpacuObjectData['wpacu_ajax_get_post_type_terms_nonce'] = wp_create_nonce('wpacu_ajax_get_post_type_terms_nonce');
+        }
+
+        // After homepage/post/page is saved and the page is reloaded, clear the cache
+        // Cache clearing default values
+        $wpacuObjectData['clear_cache_via_ajax'] = $wpacuObjectData['clear_other_caches'] = false; // default
+
+        /*
+         * [Start] Trigger plugin cache and other plugins'/system caches
+         */
+        if (self::clearCacheViaAjax()) {
+            // Instruct the script to trigger clearing the cache via AJAX
+            $wpacuObjectData['clear_cache_via_ajax'] = true;
+        }
+        /*
+         * [End] Trigger plugin cache and other plugins'/system caches
+         */
+
+        /*
+         * [Start] Trigger ONLY other plugins'/system caches
+         */
+        // When click the "Clear CSS/JS Files Cache" link within the Dashboard (e.g. toolbar or quick action areas)
+        // Cache was already cleared; Do not clear it again (save resources); Clear other caches
+        // Make sure the referrer (it needs to have one) is the same URI as the currently loaded one (without any extra parameters)
+        $wpacuClearOtherCaches = false;
+        $wpacuReferrer         = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
+
+        if ($wpacuReferrer) {
+            list(,$wpacuUriFromReferrer ) = explode('//' . parse_url($wpacuReferrer, PHP_URL_HOST), $wpacuReferrer);
+            $wpacuRequestUri              = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+            $wpacuClearOtherCaches        = ($wpacuUriFromReferrer === $wpacuRequestUri);
+        }
+
+        if ($wpacuClearOtherCaches && get_transient(WPACU_PLUGIN_ID . '_clear_assets_cache_via_link')) {
+            delete_transient(WPACU_PLUGIN_ID . '_clear_assets_cache_via_link');
+            $wpacuObjectData['clear_other_caches'] = true;
+        }
+        /*
+         * [End] Trigger ONLY other plugins'/system caches
+         */
+
+        $wpacuObjectData['server_returned_404_not_found'] = sprintf(
+            __('When accessing this page the server responded with a status of %s404 (Not Found)%s. If this page is meant to return this status, you can ignore this message, otherwise you might have a problem with this page if it is meant to return a standard 200 OK status.', 'wp-asset-clean-up'),
+            '<strong>',
+            '</strong>'
+        );
+
+        /*
+         * Whether to clear Autoptimize Cache or not (if the plugin is enabled)
+         */
+        if ( ! wpacuIsPluginActive('autoptimize/autoptimize.php') ) {
+            $wpacuObjectData['autoptimize_not_active'] = 1;
+        } else {
+            $wpacuObjectData['clear_autoptimize_cache'] = assetCleanUpClearAutoptimizeCache() ? 'true' : 'false';
+        }
+
+        /*
+         * Whether to clear "Cache Enabler" Cache or not (if the plugin is enabled)
+         */
+        if ( ! wpacuIsPluginActive('cache-enabler/cache-enabler.php') ) {
+            $wpacuObjectData['cache_enabler_not_active'] = 1;
+        } else {
+            $wpacuObjectData['clear_cache_enabler_cache'] = assetCleanUpClearCacheEnablerCache() ? 'true' : 'false';
+
+            if ( assetCleanUpClearCacheEnablerCache() ) {
+                $wpacuObjectData['wpacu_ajax_clear_cache_enabler_cache_nonce'] = wp_create_nonce( 'wpacu_ajax_clear_cache_enabler_cache_nonce' );
+            }
+        }
+
+        $wpacuObjectData = self::wpacuObjectSecurityNonces($wpacuObjectData);
+        $wpacuObjectData = self::wpacuObjectDataFetchErrors($wpacuObjectData);
+        $wpacuObjectData = self::wpacuObjectDataConfirmsAlertsMsg($wpacuObjectData);
+
+        return $wpacuObjectData;
+    }
+
+    /**
+     * @return bool
+     */
+    public static function clearCacheViaAjax()
+    {
+        // After editing post/page within the Dashboard
+        $dashUnloadAssetsSubmit = (isset($_POST['wpacu_unload_assets_area_loaded']) && $_POST['wpacu_unload_assets_area_loaded']);
+        if ($dashUnloadAssetsSubmit) {
+            return true;
+        }
+
+        // After updating the CSS/JS manager within the front-end view (when "Manage in the front-end" is enabled)
+        $frontendViewPageAssetsJustUpdated = ! is_admin() &&
+                                             (isset($_GET['wpacu_time']) && $_GET['wpacu_time']) &&
+                                             get_transient(WPACU_PLUGIN_ID . '_frontend_assets_manager_just_updated');
+        if ($frontendViewPageAssetsJustUpdated) {
+            return true;
+        }
+
+        // After updating the "Settings" within the Dashboard
+        $wpacuSettingsWithinDashboardJustUpdated = is_admin() &&
+                                                   Misc::getVar('request', 'page') === WPACU_PLUGIN_ID . '_settings' &&
+                                                   Misc::getVar('get', 'wpacu_selected_tab_area') &&
+                                                   get_transient(WPACU_PLUGIN_ID . '_settings_updated');
+        if ($wpacuSettingsWithinDashboardJustUpdated) {
+            return true;
+        }
+
+        return false;
     }
 
 	/**
@@ -939,6 +934,10 @@ CSS;
 		);
 
 		wp_enqueue_script(self::$ownAssets['scripts']['chosen']['handle']);
+
+        if (is_admin()) {
+            self::adminChosenScriptInline();
+        }
 		// [End] Chosen Script
 	}
 
@@ -971,13 +970,7 @@ CSS;
 	    wp_localize_script(
 		    self::$ownAssets['scripts']['script_core']['handle'],
 		    'wpacu_object',
-		    apply_filters('wpacu_object_data', array(
-                'ajax_url'      => esc_url(admin_url('admin-ajax.php')),
-                'plugin_prefix' => WPACU_PLUGIN_ID, // the same for both Lite & Pro
-                'plugin_slug'   => WPACU_PLUGIN_SLUG,
-                'start_del_h'   => Main::START_DEL_HARDCODED,
-                'end_del_h'     => Main::END_DEL_HARDCODED
-            ))
+		    apply_filters('wpacu_object_data', self::generateObjectData())
 	    );
 
 	    wp_enqueue_script(self::$ownAssets['scripts']['script_core']['handle']);
@@ -1023,11 +1016,204 @@ CSS;
 	 */
 	public function ownAssetLoaderTag($tag, $handle)
     {
-		// Useful in case jQuery library is deferred too (rare situations)
+        // "data-wpacu-skip": Prevent anyh asset alteration by any option set in "Settings"
+        if (in_array($handle, self::getOwnAssetsHandles('styles'))) {
+            $tag = str_replace(' href=', ' data-wpacu-skip href=', $tag);
+        }
+
+		// "data-wpacu-plugin-script": Useful in case jQuery library is deferred too (rare situations)
 		if (in_array($handle, self::getOwnAssetsHandles('scripts'))) {
-			$tag = str_replace(' src=', ' data-wpacu-plugin-script src=', $tag);
+			$tag = str_replace(' src=', ' data-wpacu-skip data-wpacu-plugin-script src=', $tag);
 		}
 
 		return $tag;
 	}
+
+    /**
+     * What's the URL to be checked for the assets if CSS/JS manager is loaded within the Dashboard?
+     *
+     * @param $postId - could be empty if it's not for a post page (e.g. a "category" page)
+     *
+     * @return string
+     */
+    public static function getFetchUrlDashboardView($postId)
+    {
+        // A post/page/custom post type, or it can also be the front page URL ("Settings" -- "Reading" -- "Your homepage displays" -- "A static page")
+        if ( $postId > 0 )  {
+            return Misc::getPageUrl($postId);
+        }
+
+        // Homepage, last possible option for the Dashboard view
+        return Misc::getPageUrl(0);
+    }
+
+    /**
+     * @return bool
+     */
+    public static function checkForFetchUrlInDashboardView()
+    {
+        global $pagenow;
+
+        // Edit taxonomy
+        if ($pagenow === 'term.php' && Misc::getVar('get', 'taxonomy') && Misc::getVar('get', 'tag_ID')) {
+            return true;
+        }
+
+        // Edit post/page/custom post type
+        // 1) Edit it in its edit page
+        if ($pagenow === 'post.php' && isset($_GET['post'], $_GET['action']) && $_GET['post'] && $_GET['action'] === 'edit') {
+            return true;
+        }
+
+        // 2) Edit it the plugin's CSS/JS manager area ("CSS & JS MANAGER" -- "MANAGE CSS/JS")
+        $wpacuFor = Misc::getVar('get', 'wpacu_for') ?: 'homepage';
+
+        if (Misc::getVar('get', 'page') === WPACU_PLUGIN_ID . '_assets_manager' && in_array($wpacuFor, array('homepage', 'posts', 'pages', 'custom_post_types'))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param $wpacuObjectData
+     *
+     * @return mixed
+     */
+    public static function wpacuObjectDataFetchErrors($wpacuObjectData)
+    {
+        // [wpacu_lite]
+        $submitTicketLink = 'https://wordpress.org/support/plugin/wp-asset-clean-up';
+        // [/wpacu_lite]
+
+        $wpacuObjectData['ajax_direct_fetch_error'] = <<<HTML
+<div class="ajax-direct-call-error-area">
+    <p class="note"><strong>Note:</strong> The checked URL returned an error when fetching the assets via AJAX call. This could be because of a firewall that is blocking the AJAX call, a redirect loop or an error in the script that is retrieving the output which could be due to an incompatibility between the plugin and the WordPress setup you are using.</p>
+    <p>Here is the response from the call:</p>
+
+    <table>
+        <tr>
+            <td width="135"><strong>Status Code Error:</strong></td>
+            <td><span class="error-code">{wpacu_status_code_error}</span> * for more information about client and server errors, <a target="_blank" href="https://en.wikipedia.org/wiki/List_of_HTTP_status_codes">check this link</a></td>
+        </tr>
+        <tr>
+            <td valign="top"><span class="dashicons dashicons-lightbulb" style="color: orange;"></span> <strong>Suggestion:</strong></td>
+            <td>Select "WP Remote POST" as a method of retrieving the assets from the "Settings" page. If that doesn't fix the issue, just use "Manage in Front-end" option which should always work and <a target="_blank" href="{$submitTicketLink}">submit a ticket</a> about your problem.</td>
+        </tr>
+        <tr>
+            <td valign="top"><strong>Output:</strong></td>
+            <td valign="top">{wpacu_output}</td>
+        </tr>
+    </table>
+</div>
+HTML;
+
+        // Sometimes, 200 OK (success) is returned, but due to an issue with the page, the assets list is not retrieved
+        $wpacuObjectData['ajax_direct_fetch_error_with_success_response'] = <<<HTML
+<div style="overflow-y: scroll; max-height: 290px;" class="ajax-direct-call-error-area">
+    <p class="note"><strong>Note:</strong> The assets could not be fetched via the AJAX call. Here is the response:</p>
+    <table>
+        <tr>
+            <td valign="top"><strong>Suggestion:</strong></td>
+            <td>Select "WP Remote POST" as a method of retrieving the assets from the "Settings" page. If that doesn't fix the issue, just use "Manage in Front-end" option which should always work and <a target="_blank" href="{$submitTicketLink}">submit a ticket</a> about your problem.</td>
+        </tr>
+        <tr>
+            <td valign="top"><strong>Output:</strong></td>
+            <td valign="top">{wpacu_output}</td>
+        </tr>
+    </table>
+</div>
+HTML;
+        return $wpacuObjectData;
+    }
+
+    /**
+     * @param $wpacuObjectData
+     *
+     * @return array
+     */
+    public static function wpacuObjectDataConfirmsAlertsMsg($wpacuObjectData)
+    {
+        $wpacuObjectData['jquery_migration_disable_confirm_msg'] =
+            __('Make sure to properly test your website if you unload the jQuery migration library.', 'wp-asset-clean-up')."\n\n".
+            __('In some cases, due to old jQuery code triggered from plugins or the theme, unloading this migration library could cause those scripts not to function anymore and break some of the front-end functionality.', 'wp-asset-clean-up')."\n\n".
+            __('If you are not sure about whether activating this option is right or not, it is better to leave it as it is (to be loaded by default) and consult with a developer.', 'wp-asset-clean-up')."\n\n".
+            __('Confirm this action to enable the unloading or cancel to leave it loaded by default.', 'wp-asset-clean-up');
+
+        $wpacuObjectData['comment_reply_disable_confirm_msg'] =
+            __('This is worth disabling if you are NOT using the default WordPress comment system (e.g. you are using the website for business purposes, to showcase your products and you are not using it as a blog where people leave comments to your posts).', 'wp-asset-clean-up')."\n\n".
+            __('If you are not sure about whether activating this option is right or not, it is better to leave it as it is (to be loaded by default).', 'wp-asset-clean-up')."\n\n".
+            __('Confirm this action to enable the unloading or cancel to leave it loaded by default.', 'wp-asset-clean-up');
+
+        // "Tools" - "Reset"
+        $wpacuObjectData['reset_settings_confirm_msg'] =
+            __('Are you sure you want to reset the settings to their default values?', 'wp-asset-clean-up')."\n\n".
+            __('This is an irreversible action.', 'wp-asset-clean-up')."\n\n".
+            __('Please confirm to continue or "Cancel" to abort it', 'wp-asset-clean-up');
+
+        $wpacuObjectData['reset_critical_css_confirm_msg'] =
+            __('Are you sure you want to remove all the critical CSS information?', 'wp-asset-clean-up-pro')."\n\n".
+            __('This is an irreversible action.', 'wp-asset-clean-up')."\n\n".
+            __('Please confirm to continue or "Cancel" to abort it', 'wp-asset-clean-up-pro');
+
+        $wpacuObjectData['reset_everything_except_settings_confirm_msg'] =
+            __('Are you sure you want to reset everything (unloads, load exceptions etc.) except settings?', 'wp-asset-clean-up')."\n\n".
+            __('This is an irreversible action.', 'wp-asset-clean-up')."\n\n".
+            __('Please confirm to continue or "Cancel" to abort it.', 'wp-asset-clean-up');
+
+        $wpacuObjectData['reset_everything_confirm_msg'] =
+            __('Are you sure you want to reset everything (settings, unloads, load exceptions etc.) to the same point it was when you first activated the plugin?', 'wp-asset-clean-up')."\n\n".
+            __('This is an irreversible action.', 'wp-asset-clean-up')."\n\n".
+            __('Please confirm to continue or "Cancel" to abort it.', 'wp-asset-clean-up');
+
+        // "Tools" - "Import & Export"
+        $wpacuObjectData['import_confirm_msg'] =
+            __('This process is NOT reversible.', 'wp-asset-clean-up')."\n\n".
+            __('Please make sure you have a backup (e.g. an exported JSON file) before proceeding.', 'wp-asset-clean-up')."\n\n".
+            __('Please confirm to continue or "Cancel" to abort it.', 'wp-asset-clean-up');
+
+        $wpacuObjectData['jquery_unload_alert'] = 'jQuery library is a WordPress library that it is used in WordPress plugins/themes most of the time.' . "\n\n" .
+                                                  'There are currently other JavaScript "children" files connected to it, that will stop working, if this library is unloaded' . "\n\n" .
+                                                  'If you are positive this page does not require jQuery (very rare cases), then you can continue by pressing "OK"' . "\n\n" .
+                                                  'Otherwise, it is strongly recommended to keep this library loaded by pressing "Cancel" to avoid breaking the functionality of the website.';
+        // js-cookie
+        $wpacuObjectData['woo_js_cookie_unload_alert'] = 'Please be careful when unloading "js-cookie" as there are other JS files that depend on it which will also be unloaded, including "wc-cart-fragments" which is required for the functionality of the WooCommerce mini cart.' . "\n\n" .
+                                                         'Click "OK" to continue or "Cancel" if you have any doubts about unloading this file';
+
+        // wc-cart-fragments
+        $wpacuObjectData['woo_wc_cart_fragments_unload_alert'] = 'Please be careful when unloading "wc-cart-fragments" as it\'s required for the functionality of the WooCommerce mini cart. Unless you are sure you do not need it on this page, it is advisable to leave it loaded.' . "\n\n" .
+                                                                 'Click "OK" to continue or "Cancel" if you have any doubts about unloading this file.';
+
+        // backbone, underscore, etc.
+        $wpacuObjectData['sensitive_library_unload_alert'] = 'Please make sure to properly test this page after this particular JavaScript file is unloaded as it is usually loaded for a reason.' . "\n\n" .
+                                                             'If you are not sure whether it is used or not, then consider using the "Cancel" button to avoid taking ay chances in breaking the website\'s functionality.' . "\n\n" .
+                                                             'It is advised to check the browser\'s console via right-click and "Inspect" to check for any reported errors.';
+
+        $wpacuObjectData['dashicons_unload_alert_ninja_forms_alert'] = 'It looks like you are using "Ninja Forms" plugin which is sometimes loading Dashicons for the forms\' styling.' . "\n\n" .
+                                                                       'If you are sure your forms do not use Dashicons, please use the following option \'Ignore dependency rule and keep the "children" loaded\' to avoid the unloading of the "nf-display" handle.' . "\n\n" .
+                                                                       'Click "OK" to continue or "Cancel" if you have any doubts about unloading the Dashicons. It is better to have Dashicons loaded, then take a chance and break the forms\' layout.';
+        return $wpacuObjectData;
+    }
+
+    /**
+     * @param $wpacuObjectData
+     *
+     * @return mixed
+     */
+    public static function wpacuObjectSecurityNonces($wpacuObjectData)
+    {
+        // Security nonces for AJAX calls
+        $wpacuObjectData['wpacu_update_specific_settings_nonce']       = wp_create_nonce('wpacu_update_specific_settings_nonce');
+        $wpacuObjectData['wpacu_update_asset_row_state_nonce']         = wp_create_nonce('wpacu_update_asset_row_state_nonce');
+        $wpacuObjectData['wpacu_area_update_assets_row_state_nonce']   = wp_create_nonce('wpacu_area_update_assets_row_state_nonce');
+        $wpacuObjectData['wpacu_print_loaded_hardcoded_assets_nonce']  = wp_create_nonce('wpacu_print_loaded_hardcoded_assets_nonce');
+        $wpacuObjectData['wpacu_ajax_check_remote_file_size_nonce']    = wp_create_nonce('wpacu_ajax_check_remote_file_size_nonce');
+        $wpacuObjectData['wpacu_ajax_check_external_urls_nonce']       = wp_create_nonce('wpacu_ajax_check_external_urls_nonce');
+        $wpacuObjectData['wpacu_ajax_get_loaded_assets_nonce']         = wp_create_nonce('wpacu_ajax_get_loaded_assets_nonce');
+        $wpacuObjectData['wpacu_ajax_load_page_restricted_area_nonce'] = wp_create_nonce('wpacu_ajax_load_page_restricted_area_nonce');
+        $wpacuObjectData['wpacu_ajax_clear_cache_nonce']               = wp_create_nonce('wpacu_ajax_clear_cache_nonce');
+        $wpacuObjectData['wpacu_ajax_preload_url_nonce']               = wp_create_nonce('wpacu_ajax_preload_url_nonce'); // After the CSS/JS manager's form is submitted (e.g. on an edit post/page)
+
+        return $wpacuObjectData;
+    }
 }

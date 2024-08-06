@@ -2,11 +2,15 @@
 /*
  * No direct access to this file
  */
+
+use WpAssetCleanUp\Misc;
+use WpAssetCleanUp\MiscAdmin;
+
 if (! isset($data)) {
 	exit;
 }
 
-include_once '_top-area.php';
+include_once __DIR__ . '/_top-area.php';
 
 $wpacuTabList = array(
     'bulk_unloaded'         => __('Bulk Unloaded (page types)', 'wp-asset-clean-up'),
@@ -33,17 +37,17 @@ $wpacuTabCurrent = isset($_REQUEST['wpacu_bulk_menu_tab']) && array_key_exists( 
     </ul>
 	<?php
 	if ($wpacuTabCurrent === 'bulk_unloaded') {
-		include_once '_admin-page-settings-bulk-changes/_bulk-unloaded.php';
+		include_once __DIR__ . '/_admin-page-settings-bulk-changes/_bulk-unloaded.php';
 	} elseif($wpacuTabCurrent === 'regex_unloads') {
-		include_once '_admin-page-settings-bulk-changes/_regex-unloads.php';
+		include_once __DIR__ . '/_admin-page-settings-bulk-changes/_regex-unloads.php';
 	} elseif($wpacuTabCurrent === 'regex_load_exceptions') {
-		include_once '_admin-page-settings-bulk-changes/_regex-load-exceptions.php';
+		include_once __DIR__ . '/_admin-page-settings-bulk-changes/_regex-load-exceptions.php';
 	} elseif ($wpacuTabCurrent === 'preloaded_assets') {
-		include_once '_admin-page-settings-bulk-changes/_preloaded-assets.php';
+		include_once __DIR__ . '/_admin-page-settings-bulk-changes/_preloaded-assets.php';
 	} elseif ($wpacuTabCurrent === 'script_attrs') {
-		include_once '_admin-page-settings-bulk-changes/_script-attrs.php';
+		include_once __DIR__ . '/_admin-page-settings-bulk-changes/_script-attrs.php';
 	} elseif ($wpacuTabCurrent === 'assets_positions') {
-		include_once '_admin-page-settings-bulk-changes/_assets-positions.php';
+		include_once __DIR__ . '/_admin-page-settings-bulk-changes/_assets-positions.php';
 	}
 
 	/**
@@ -68,17 +72,15 @@ $wpacuTabCurrent = isset($_REQUEST['wpacu_bulk_menu_tab']) && array_key_exists( 
 
 			$isExternalSrc = true;
 
-			if (\WpAssetCleanUp\Misc::getLocalSrc($src)
-			    || strpos($src, '/?') !== false // Dynamic Local URL
-			    || strpos(str_replace(site_url(), '', $src), '?') === 0 // Starts with ? right after the site url (it's a local URL)
+			if (Misc::getLocalSrcIfExist($src)
+                || strpos($src, '/?') !== false // Dynamic Local URL
+                || strncmp(str_replace(site_url(), '', $src), '?', 1) === 0 // Starts with ? right after the site url (it's a local URL)
 			) {
 				$isExternalSrc = false;
-				$isCoreFile = \WpAssetCleanUp\Misc::isCoreFile($data['assets_info'][$assetType][$handle]);
+				$isCoreFile = MiscAdmin::isCoreFile($data['assets_info'][$assetType][$handle]);
 			}
 
-			if (strpos($src, '/') === 0 && strpos($src, '//') !== 0) {
-				$src = site_url() . $src;
-			}
+            $src = Misc::getHrefFromSource($src);
 
 			if (isset($data['assets_info'][ $assetType ][ $handle ][$verKey]) && $data['assets_info'][ $assetType ][ $handle ][$verKey]) {
 				$verToPrint = is_array($data['assets_info'][ $assetType ][ $handle ][$verKey])
@@ -102,17 +104,12 @@ $wpacuTabCurrent = isset($_REQUEST['wpacu_bulk_menu_tab']) && array_key_exists( 
 			}
 			?>
             <?php
-			// [wpacu_pro]
-			$preloadedStatus = isset($data['assets_info'][ $assetType ][ $handle ]['preloaded_status']) ? $data['assets_info'][ $assetType ][ $handle ]['preloaded_status'] : false;
-			if ($preloadedStatus === 'async') { echo '&nbsp;(<strong><em>'.$preloadedStatus.'</em></strong>)'; }
-			// [/wpacu_pro]
-
             if ( $src ) {
 			    $appendAfterSrc = strpos($src, '?') === false ? '?'.$verToAppend : '&'.$verToAppend;
 			    ?>
                 <div><a <?php if ($isExternalSrc) { ?> data-wpacu-external-source="<?php echo esc_attr($src . $appendAfterSrc); ?>" <?php } ?> href="<?php echo esc_html($src . $appendAfterSrc); ?>" target="_blank"><small><?php echo str_replace( site_url(), '', $src ); ?></small></a> <?php if ($isExternalSrc) { ?><span data-wpacu-external-source-status></span><?php } ?></div>
                 <?php
-			    $maybeInactiveAsset = \WpAssetCleanUp\Misc::maybeIsInactiveAsset($src);
+			    $maybeInactiveAsset = MiscAdmin::maybeIsInactiveAsset($src);
 
 			    if (is_array($maybeInactiveAsset) && ! empty($maybeInactiveAsset)) {
 			        if ($maybeInactiveAsset['from'] === 'plugin') { ?>

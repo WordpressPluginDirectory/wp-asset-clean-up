@@ -1,6 +1,6 @@
 <?php
 
-namespace MatthiasMullie\PathConverter;
+namespace MatthiasMullieWpacu\PathConverter;
 
 /**
  * Convert paths relative from 1 file to another.
@@ -178,6 +178,14 @@ class Converter implements ConverterInterface
      */
     protected function dirname($path)
     {
+        // [Gabe Livan]
+        if ($path === '/') {
+            return $path;
+        }
+
+        try {
+        // [/Gabe Livan]
+
         if (@is_file($path)) {
             return dirname($path);
         }
@@ -197,6 +205,13 @@ class Converter implements ConverterInterface
         if (preg_match('/.*\..*$/', basename($path)) !== 0) {
             return dirname($path);
         }
+
+        // [Gabe Livan]
+        } catch (\Exception $e) {
+            // you're on your own here!
+            return $path;
+        }
+        // [/Gabe Livan]
 
         // you're on your own here!
         return $path;

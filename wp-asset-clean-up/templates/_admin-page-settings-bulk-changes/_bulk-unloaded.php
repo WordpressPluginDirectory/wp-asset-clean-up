@@ -2,12 +2,11 @@
 /*
  * No direct access to this file
  */
+
+use WpAssetCleanUp\BulkChanges;
+
 if (! isset($data)) {
 	exit;
-}
-
-if (! defined('WPACU_USE_MODAL_BOX')) {
-	define('WPACU_USE_MODAL_BOX', true);
 }
 
 $possibleWpacuFor = array('everywhere', 'post_types', 'taxonomies', 'authors', 'search_results', 'dates', '404_not_found');
@@ -24,14 +23,14 @@ $availableForPro = '<span class="wpacu-tooltip">'
   ' <img style="opacity: 0.4;" width="20" height="20" src="'.WPACU_PLUGIN_URL.'/assets/icons/icon-lock.svg" valign="top" alt="" />';
 // [/wpacu_lite]
 ?>
-<nav class="nav-tab-wrapper">
-	<a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_bulk_unloads')); ?>" class="nav-tab <?php if ($data['for'] === 'everywhere') { ?>nav-tab-active<?php } ?>"><?php esc_html_e('Everywhere', 'wp-asset-clean-up'); ?></a>
-	<a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_bulk_unloads&wpacu_for=post_types')); ?>" class="nav-tab <?php if ($data['for'] === 'post_types') { ?>nav-tab-active<?php } ?>">Posts, Pages &amp; Custom Post Types</a>
-	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;Taxonomies</a>
-	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;Authors</a>
-	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;Search Results</a>
-	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;Dates</a>
-	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;404 Not Found</a>
+<nav class="wpacu-nav-tab-wrapper">
+	<a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_bulk_unloads')); ?>" class="wpacu-nav-tab <?php if ($data['for'] === 'everywhere') { ?>wpacu-nav-tab-active<?php } ?>"><?php esc_html_e('Everywhere', 'wp-asset-clean-up'); ?></a>
+	<a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_bulk_unloads&wpacu_for=post_types')); ?>" class="wpacu-nav-tab <?php if ($data['for'] === 'post_types') { ?>wpacu-nav-tab-active<?php } ?>">Posts, Pages &amp; Custom Post Types</a>
+	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="wpacu-nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;Taxonomies</a>
+	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="wpacu-nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;Authors</a>
+	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="wpacu-nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;Search Results</a>
+	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="wpacu-nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;Dates</a>
+	<a href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_bulk_unloaded&utm_medium=tab_link'); ?>" target="_blank" class="wpacu-nav-tab go-pro-link-no-style no-transition"><?php echo wp_kses($availableForPro, array('span' => array('class' => array()), 'br' => array(), 'img' => array('style' => array(), 'width' => array(), 'height' => array(), 'src' => array(), 'valign' => array(), 'alt' => array()))); ?> &nbsp;404 Not Found</a>
 </nav>
 
 <div class="wpacu_clearfix"></div>
@@ -47,7 +46,7 @@ if ($data['for'] === 'post_types') {
             <input type="hidden" name="wpacu_for" value="post_types" />
 
             <div style="margin: 0 0 10px 0;">Select the page or post type (including custom ones) for which you want to see the unloaded scripts &amp; styles:</div>
-            <?php \WpAssetCleanUp\BulkChanges::buildPostTypesListDd($data['post_types_list'], $data['post_type']); ?>
+            <?php BulkChanges::buildPostTypesListDd($data['post_types_list'], $data['post_type']); ?>
         </form>
     </div>
 	<?php
@@ -61,7 +60,7 @@ if ($data['for'] === 'post_types') {
         <div class="wpacu_clearfix"></div>
 
         <div class="alert">
-            <p>This is the list of the assets that are <strong>unloaded everywhere</strong> (site-wide) on all pages (including home page). &nbsp;&nbsp;<a id="wpacu-add-bulk-rules-info-target" href="#wpacu-add-bulk-rules-info" style="text-decoration: none;"><span class="dashicons dashicons-info"></span> How the list below gets filled with site-wide rules?</a></p>
+            <p>This is the list of the assets that are <strong>unloaded everywhere</strong> (site-wide) on all pages (including home page). &nbsp;&nbsp;<a data-wpacu-modal-target="wpacu-add-bulk-rules-info-target" href="#wpacu-add-bulk-rules-info" style="text-decoration: none;"><span class="dashicons dashicons-info"></span> How the list below gets filled with site-wide rules?</a></p>
             <p>If you want to remove this rule and have them loading, use the "Remove site-wide rule" checkbox.</p>
             <div style="margin: 0; background: white; padding: 10px; border: 1px solid #ccc; width: auto; display: inline-block;">
                 <ul>
@@ -154,7 +153,7 @@ if ($data['for'] === 'post_types') {
         <div class="wpacu_clearfix"></div>
 
         <div class="alert">
-            <p>This is the list of the assets that are <strong>unloaded</strong> on all pages belonging to the <strong><u><?php echo esc_html($data['post_type']); ?></u></strong> post type. &nbsp;&nbsp;<a id="wpacu-add-bulk-rules-info-target" href="#wpacu-add-bulk-rules-info" style="text-decoration: none;"><span class="dashicons dashicons-info"></span> How the list below gets filled with site-wide rules?</a></p>
+            <p>This is the list of the assets that are <strong>unloaded</strong> on all pages belonging to the <strong><u><?php echo esc_html($data['post_type']); ?></u></strong> post type. &nbsp;&nbsp;<a data-wpacu-modal-target="wpacu-add-bulk-rules-info-target" href="#wpacu-add-bulk-rules-info" style="text-decoration: none;"><span class="dashicons dashicons-info"></span> How the list below gets filled with site-wide rules?</a></p>
             <p>If you want to make an asset load again, use the "Remove bulk rule" checkbox.</p>
             <div style="margin: 0; background: white; padding: 10px; border: 1px solid #ccc; width: auto; display: inline-block;">
                 <ul>
@@ -169,7 +168,7 @@ if ($data['for'] === 'post_types') {
 		<div style="padding: 0 10px 0 0;">
             <p style="margin-bottom: 10px;"><strong><?php _e('Stylesheets (.css) Unloaded', 'wp-asset-clean-up'); ?></strong></p>
 			<?php
-			if (! empty($data['values']['styles'])) {
+			if ( ! empty($data['values']['styles']) ) {
 				?>
                 <table class="wp-list-table widefat fixed striped">
                     <tr>
@@ -205,7 +204,7 @@ if ($data['for'] === 'post_types') {
             <p style="margin-bottom: 10px;"><strong><?php _e('Scripts (.js) Unloaded', 'wp-asset-clean-up'); ?></strong></p>
 
 			<?php
-			if (! empty($data['values']['scripts'])) {
+			if ( ! empty($data['values']['scripts']) ) {
 				?>
                 <table class="wp-list-table widefat fixed striped">
                     <tr>
@@ -293,6 +292,8 @@ if ($data['for'] === 'post_types') {
             <li>Unload site-wide (everywhere)</strong></li>
             <li>Unload on All Pages of `product` post type</li>
             <li>Unload on All Pages of `product_cat` taxonomy type etc.</li>
+            <li>Unload on this `[custom post type name here]` post type archive page</li>
+            <li>Unload on this page type (any 404 Not Found URL), etc.</li>
         </ul>
 
         <p>A bulk change is considered anything that is applied once, and it has effect on multiple pages of the same kind or site-wide.</p>

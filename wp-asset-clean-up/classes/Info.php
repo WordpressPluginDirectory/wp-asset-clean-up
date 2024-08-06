@@ -29,7 +29,7 @@ class Info
 			$data['for'] = sanitize_text_field($_GET['wpacu_for']);
 		}
 
-		Main::instance()->parseTemplate('admin-page-getting-started', $data, true);
+		MainAdmin::instance()->parseTemplate('admin-page-getting-started', $data, true);
 	}
 
     /**
@@ -37,24 +37,16 @@ class Info
      */
     public function help()
     {
-        Main::instance()->parseTemplate('admin-page-get-help', array(), true);
+        MainAdmin::instance()->parseTemplate('admin-page-get-help', array(), true);
     }
 
-	/**
-	 *
-	 */
-	public function pagesInfo()
+    /**
+     *
+     */
+    public function license()
     {
-	    Main::instance()->parseTemplate('admin-page-pages-info', array(), true);
+        MainAdmin::instance()->parseTemplate('admin-page-license', array(), true);
     }
-
-	/**
-	 *
-	 */
-	public function license()
-	{
-		Main::instance()->parseTemplate('admin-page-license', array(), true);
-	}
 
 	/**
 	 * @param $locationChild
@@ -62,7 +54,9 @@ class Info
 	 * @param $allActivePluginsIcons
 	 *
 	 * @return string
-	 */
+     *
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public static function getPluginInfo($locationChild, $allPlugins, $allActivePluginsIcons)
 	{
 		foreach (array_keys($allPlugins) as $pluginFile) {
@@ -92,12 +86,26 @@ class Info
 		foreach (array_keys($allThemes) as $themeDir) {
 			if ($locationChild === $themeDir) {
 				$themeInfo = wp_get_theme($themeDir);
-				$themeIconUrl = Misc::getThemeIcon($themeInfo->get('Name'));
+                $themeIconHtml = ''; // default
+                $hasIcon = false; // default
 
-				$themeIconHtml = '';
-				$hasIcon = false;
+				$themeIconUrl = MiscAdmin::getThemeIcon($themeInfo->get('Name'));
 
-				if ($themeIconUrl) {
+                if ($themeIconUrl === '') {
+                    // Check for any screenshot.png from the root of the theme
+                    $themeFullDir      = $themeInfo->__get('theme_root');
+                    $themeTemplateName = $themeInfo->__get('template');
+
+                    $pathToMaybeImage = $themeFullDir . '/'.$themeTemplateName.'/screenshot.png';
+
+                    //echo $pathToMaybeImage;
+
+                    if (is_file($pathToMaybeImage)) {
+                        $themeIconUrl = site_url() . '/' . str_replace(ABSPATH, '', $pathToMaybeImage);
+                    }
+                }
+
+				if ($themeIconUrl !== '') {
 					$hasIcon = true;
 					$imageIconStyle = 'style="background: transparent url(\''.$themeIconUrl.'\') no-repeat 0 0; background-size: cover;"';
 					$themeIconHtml  = '<div class="icon-theme has-icon"><div class="icon-area" '.$imageIconStyle.'></div></div>';

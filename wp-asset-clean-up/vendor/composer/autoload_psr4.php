@@ -6,6 +6,7 @@ $vendorDir = dirname(dirname(__FILE__));
 $baseDir = dirname($vendorDir);
 
 return array(
-    'MatthiasMullie\\PathConverter\\' => array($vendorDir . '/matthiasmullie/path-converter/src'),
-    'MatthiasMullie\\Minify\\' => array($baseDir . '/src', $vendorDir . '/matthiasmullie/minify/src'),
+    'PsrWpacu\\Cache\\' => array($vendorDir . '/psr/cache/src'),
+    'MatthiasMullieWpacu\\PathConverter\\' => array($vendorDir . '/matthiasmullie/path-converter/src'),
+    'MatthiasMullieWpacu\\Minify\\' => array($baseDir . '/src', $vendorDir . '/matthiasmullie/minify/src'),
 );

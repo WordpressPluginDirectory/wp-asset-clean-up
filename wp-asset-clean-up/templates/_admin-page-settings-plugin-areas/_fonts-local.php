@@ -2,6 +2,9 @@
 /*
  * No direct access to this file
  */
+
+use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
+
 if (! isset($data, $selectedTabArea)) {
 	exit;
 }
@@ -25,12 +28,7 @@ $ddOptions = array(
 			    <?php echo sprintf(esc_html__('Apply %s CSS property value', 'wp-asset-clean-up'), '<span style="background: #f5f5f5; padding: 4px;">font-display:</span>'); ?>
             </th>
             <td>
-                <a class="go-pro-link-no-style" target="_blank" href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_usage_settings&utm_medium=local_fonts_optimization'); ?>"><span class="wpacu-tooltip" style="width: 186px;"><?php esc_html_e('This is a feature available in the Pro version! Unlock it!', 'wp-asset-clean-up'); ?></span> <img style="opacity: 0.6;" width="20" height="20" src="<?php echo esc_url(WPACU_PLUGIN_URL.'/assets/icons/icon-lock.svg'); ?>" valign="top" alt="" /></a>&nbsp;
-                &nbsp;<select
-                        <?php /* [wpacu_lite] */ ?>
-                        style="opacity: 0.5;"
-		                <?php /* [/wpacu_lite] */ ?>
-                        name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[local_fonts_display]">
+                <select name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[local_fonts_display]">
                     <option value="">Do not apply (default)</option>
 				    <?php
 				    foreach ($ddOptions as $ddOptionValue => $ddOptionText) {
@@ -40,24 +38,21 @@ $ddOptions = array(
 				    ?>
                 </select> &nbsp; / &nbsp;
 
-                <div style="display: inline-block; opacity: 0.5;">
                     Overwrite any existing "font-display" value? &nbsp;
                 <label for="wpacu_local_fonts_display_overwrite_no"><input id="wpacu_local_fonts_display_overwrite_no"
-                           disabled="disabled"
-                           checked="checked"
+                           <?php if (! $data['local_fonts_display_overwrite']) { echo 'checked="checked"'; } ?>
                            type="radio"
                            name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[local_fonts_display_overwrite]"
                                value="" />No</label>
                     &nbsp;&nbsp;&nbsp;
                     <label for="wpacu_local_fonts_display_overwrite_yes"><input id="wpacu_local_fonts_display_overwrite_yes"
-                           disabled="disabled"
+                           <?php if ($data['local_fonts_display_overwrite']) { echo 'checked="checked"'; } ?>
                            type="radio"
                            name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[local_fonts_display_overwrite]"
                            value="1" />Yes</label>
-                </div>
                 &nbsp;
-                <p><?php _e('This feature applies site-wide "font-display:" property (if none set already in the file) within @font-face in every loaded CSS file.', 'wp-asset-clean-up'); ?> &nbsp; <span style="color: #0073aa;" class="dashicons dashicons-info"></span>&nbsp;<a id="wpacu-local-fonts-display-info-target" href="#wpacu-local-fonts-display-info"><?php _e('Read more', 'wp-asset-clean-up'); ?></a></p>
-                <p><?php echo sprintf(__('The new generated CSS files will be loaded from <code>%s</code>, as the existing files from plugins/themes will not be altered in any way.', 'wp-asset-clean-up'), \WpAssetCleanUp\OptimiseAssets\OptimizeCommon::getRelPathPluginCacheDir()); ?></p>
+                <p><?php _e('This feature applies site-wide "font-display:" property (if none set already in the file) within @font-face in every loaded CSS file.', 'wp-asset-clean-up'); ?> &nbsp; <span style="color: #0073aa;" class="dashicons dashicons-info"></span>&nbsp;<a data-wpacu-modal-target="wpacu-local-fonts-display-info-target" href="#wpacu-local-fonts-display-info"><?php _e('Read more', 'wp-asset-clean-up'); ?></a></p>
+                <p><?php echo sprintf(__('The new generated CSS files will be loaded from <code>%s</code>, as the existing files from plugins/themes will not be altered in any way.', 'wp-asset-clean-up'), OptimizeCommon::getRelPathPluginCacheDir()); ?></p>
 
                 <hr />
 

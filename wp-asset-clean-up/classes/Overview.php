@@ -12,14 +12,7 @@ class Overview
 	 * @var array
 	 */
 	public $data = array(
-        'page_options_to_text' => array(
-	        'no_css_minify'      => 'Do not minify CSS',
-	        'no_css_optimize'    => 'Do not combine CSS',
-            'no_js_minify'       => 'Do not minify JS',
-	        'no_js_optimize'     => 'Do not combine JS',
-            'no_assets_settings' => 'Do not apply any CSS &amp; JavaScript settings (including preloading, "async", "defer" &amp; any unload rules)',
-            'no_wpacu_load'      => 'Do not load %s on this page'
-        )
+        'page_options_to_text' => array()
     );
 
 	/**
@@ -27,6 +20,17 @@ class Overview
 	 */
 	public function __construct()
     {
+        $this->data = array(
+            'page_options_to_text' => array(
+                'no_css_minify'      => __('Do not minify CSS', 'wp-asset-clean-up'),
+                'no_css_optimize'    => __('Do not combine CSS', 'wp-asset-clean-up'),
+                'no_js_minify'       => __('Do not minify JS', 'wp-asset-clean-up'),
+                'no_js_optimize'     => __('Do not combine JS', 'wp-asset-clean-up'),
+                'no_assets_settings' => __('Do not apply any CSS &amp; JavaScript settings', 'wp-asset-clean-up'),
+                'no_wpacu_load'      => __('Do not load %s on this page', 'wp-asset-clean-up')
+            )
+        );
+
         // The code initiated in this function is relevant only in the "Overview" page
         if (Misc::getVar('request', 'page') !== WPACU_PLUGIN_ID . '_overview') {
             return;
@@ -70,7 +74,7 @@ class Overview
 	    ) {
 		    check_admin_referer('wpacu_clear_all_rules', 'wpacu_clear_all_rules_nonce');
 		    Maintenance::removeAllRulesFor($wpacuHandle, $wpacuAssetType);
-		    set_transient('wpacu_all_rules_cleared', array('handle' => $wpacuHandle, 'type' => $wpacuAssetType));
+		    set_transient(WPACU_PLUGIN_ID . '_all_rules_cleared', array('handle' => $wpacuHandle, 'type' => $wpacuAssetType));
 		    wp_redirect(admin_url('admin.php?page=wpassetcleanup_overview&wpacu_all_rules_cleared=1'));
 		    exit();
 	    }
@@ -88,7 +92,7 @@ class Overview
 	    }
 	    // [END] Clear all rules for the chosen "orphaned" handle
 
-	    // [START] Clear all redundant unload rules (if the site-wide one is already enabled)
+	    // [START] Clear all redundant unloading rules (if the site-wide one is already enabled)
 	    $transientName = 'wpacu_all_redundant_unload_rules_cleared';
 	    if ( isset( $_POST['wpacu_action'], $_POST['wpacu_handle'], $_POST['wpacu_asset_type'] )
 	         && ( $wpacuAction = $_POST['wpacu_action'] )
@@ -113,7 +117,7 @@ class Overview
 			    delete_transient($transientName);
 		    }, PHP_INT_MAX);
 	    }
-	    // [END] Clear all redundant unload rules (if the site-wide one is already enabled)
+	    // [END] Clear all redundant unloading rules (if the site-wide one is already enabled)
     }
 
     /**
@@ -137,7 +141,7 @@ class Overview
 		    $wpacuFrontPageUnloadsArray = @json_decode( $wpacuFrontPageUnloads, ARRAY_A );
 
 		    foreach (array('styles', 'scripts') as $assetType) {
-			    if ( isset( $wpacuFrontPageUnloadsArray[$assetType] ) && ! empty( $wpacuFrontPageUnloadsArray[$assetType] ) ) {
+			    if ( ! empty( $wpacuFrontPageUnloadsArray[$assetType] ) ) {
 				    foreach ( $wpacuFrontPageUnloadsArray[$assetType] as $assetHandle ) {
 					    $allHandles[$assetType][ $assetHandle ]['unload_on_home_page'] = 1;
 					    }
@@ -152,7 +156,7 @@ class Overview
 		    $wpacuFrontPageLoadExceptionsArray = @json_decode( $wpacuFrontPageLoadExceptions, ARRAY_A );
 
 		    foreach ( array('styles', 'scripts') as $assetType ) {
-			    if ( isset( $wpacuFrontPageLoadExceptionsArray[$assetType] ) && ! empty( $wpacuFrontPageLoadExceptionsArray[$assetType] ) ) {
+			    if ( ! empty( $wpacuFrontPageLoadExceptionsArray[$assetType] ) ) {
 				    foreach ( $wpacuFrontPageLoadExceptionsArray[$assetType] as $assetHandle ) {
 					    $allHandles[$assetType][ $assetHandle ]['load_exception_on_home_page'] = 1;
 					    }
@@ -165,9 +169,9 @@ class Overview
 
 	    if ($wpacuFrontPageData) {
 		    $wpacuFrontPageDataArray = @json_decode( $wpacuFrontPageData, ARRAY_A );
-		    if ( isset($wpacuFrontPageDataArray['scripts']) && ! empty($wpacuFrontPageDataArray['scripts']) ) {
+		    if ( ! empty($wpacuFrontPageDataArray['scripts']) ) {
 			    foreach ($wpacuFrontPageDataArray['scripts'] as $assetHandle => $assetData) {
-				    if (isset($assetData['attributes']) && ! empty($assetData['attributes'])) {
+				    if ( ! empty($assetData['attributes']) ) {
 					    // async, defer attributes
 					    $allHandles['scripts'][ $assetHandle ]['script_attrs']['home_page'] = $assetData['attributes'];
 					    }
@@ -175,7 +179,7 @@ class Overview
 		    }
 
 		    // Do not apply "async", "defer" exceptions (e.g. "defer" is applied site-wide, except the home page)
-		    if (isset($wpacuFrontPageDataArray['scripts_attributes_no_load']) && ! empty($wpacuFrontPageDataArray['scripts_attributes_no_load'])) {
+		    if ( ! empty($wpacuFrontPageDataArray['scripts_attributes_no_load']) ) {
 			    foreach ($wpacuFrontPageDataArray['scripts_attributes_no_load'] as $assetHandle => $assetAttrsNoLoad) {
 				    $allHandles['scripts'][$assetHandle]['attrs_no_load']['home_page'] = $assetAttrsNoLoad;
 				    }
@@ -244,16 +248,16 @@ SQL;
 						    }
 				    }
 			    } elseif ( $wpacuValues['meta_key'] === '_' . $wpacuPluginId . '_data' ) {
-				    if ( isset( $decodedValues['scripts'] ) && ! empty( $decodedValues['scripts'] ) ) {
+				    if ( ! empty( $decodedValues['scripts'] ) ) {
 					    foreach ( $decodedValues['scripts'] as $assetHandle => $scriptData ) {
-						    if ( isset( $scriptData['attributes'] ) && ! empty( $scriptData['attributes'] ) ) {
+						    if ( ! empty( $scriptData['attributes'] ) ) {
 							    // async, defer attributes
 							    $allHandles['scripts'][ $assetHandle ]['script_attrs'][$refKey][$refId] = $scriptData['attributes'];
 							    }
 					    }
 				    }
 
-				    if ( isset( $decodedValues['scripts_attributes_no_load'] ) && ! empty( $decodedValues['scripts_attributes_no_load'] ) ) {
+				    if ( ! empty( $decodedValues['scripts_attributes_no_load'] ) ) {
 					    foreach ( $decodedValues['scripts_attributes_no_load'] as $assetHandle => $scriptNoLoadAttrs ) {
 						    $allHandles['scripts'][$assetHandle]['attrs_no_load'][$refKey][$refId] = $scriptNoLoadAttrs;
 						    }
@@ -265,8 +269,7 @@ SQL;
 	    /*
 		 * Global (Site-wide) Rules: Preloading, Position changing, Unload via RegEx, etc.
 		 */
-	    $wpacuGlobalData = get_option(WPACU_PLUGIN_ID . '_global_data');
-	    $wpacuGlobalDataArray = @json_decode($wpacuGlobalData, ARRAY_A);
+	    $wpacuGlobalDataArray = wpacuGetGlobalData();
 
 	    $allPossibleDataTypes = array(
             'load_it_logged_in',
@@ -287,7 +290,7 @@ SQL;
 			    }
 
 		    foreach ($allPossibleDataTypes as $dataType) {
-			    if ( isset( $wpacuGlobalDataArray[ $assetType ][$dataType] ) && ! empty( $wpacuGlobalDataArray[ $assetType ][$dataType] ) ) {
+			    if ( ! empty( $wpacuGlobalDataArray[ $assetType ][$dataType] ) ) {
 				    foreach ( $wpacuGlobalDataArray[ $assetType ][$dataType] as $assetHandle => $dataValue ) {
 					    if ($dataType === 'everywhere' && $assetType === 'scripts' && isset($dataValue['attributes'])) {
 						    if (count($dataValue['attributes']) === 0) {
@@ -304,26 +307,7 @@ SQL;
 				    }
 			    }
 		    }
-
-		    foreach (array('unload_regex', 'load_regex') as $unloadType) {
-			    if (isset($wpacuGlobalDataArray[$assetType][$unloadType]) && ! empty($wpacuGlobalDataArray[$assetType][$unloadType])) {
-				    foreach ($wpacuGlobalDataArray[$assetType][$unloadType] as $assetHandle => $unloadData) {
-					    if (isset($unloadData['enable'], $unloadData['value']) && $unloadData['enable'] && $unloadData['value']) {
-						    $allHandles[ $assetType ][ $assetHandle ][$unloadType] = $unloadData['value'];
-						    }
-				    }
-			    }
-		    }
-	    }
-
-	    // Do not apply "async", "defer" exceptions (e.g. "defer" is applied site-wide, except the 404, search, date)
-	    if (isset($wpacuGlobalDataArray['scripts_attributes_no_load']) && ! empty($wpacuGlobalDataArray['scripts_attributes_no_load'])) {
-		    foreach ($wpacuGlobalDataArray['scripts_attributes_no_load'] as $unloadedIn => $unloadedInValues) {
-			    foreach ($unloadedInValues as $assetHandle => $assetAttrsNoLoad) {
-				    $allHandles['scripts'][$assetHandle]['attrs_no_load'][$unloadedIn] = $assetAttrsNoLoad;
-				    }
-		    }
-	    }
+        }
 
 	    /*
 		 * Unload Site-Wide (Everywhere) Rules: Preloading, Position changing, Unload via RegEx, etc.
@@ -332,7 +316,7 @@ SQL;
 	    $wpacuGlobalUnloadDataArray = @json_decode($wpacuGlobalUnloadData, ARRAY_A);
 
 	    foreach (array('styles', 'scripts') as $assetType) {
-		    if (isset($wpacuGlobalUnloadDataArray[$assetType]) && ! empty($wpacuGlobalUnloadDataArray[$assetType])) {
+		    if ( ! empty($wpacuGlobalUnloadDataArray[$assetType]) ) {
 			    foreach ($wpacuGlobalUnloadDataArray[$assetType] as $assetHandle) {
 				    $allHandles[ $assetType ][ $assetHandle ]['unload_site_wide'] = 1;
 				    }
@@ -346,7 +330,7 @@ SQL;
 	    $wpacuBulkUnloadDataArray = @json_decode($wpacuBulkUnloadData, ARRAY_A);
 
 	    foreach (array('styles', 'scripts') as $assetType) {
-		    if (isset($wpacuBulkUnloadDataArray[$assetType]) && ! empty($wpacuBulkUnloadDataArray[$assetType])) {
+		    if ( ! empty($wpacuBulkUnloadDataArray[$assetType]) ) {
 			    foreach ($wpacuBulkUnloadDataArray[$assetType] as $unloadBulkType => $unloadBulkValues) {
 				    if (empty($unloadBulkValues)) {
 					    continue;
@@ -384,7 +368,7 @@ SQL;
 		$this->data['handles'] = $allHandles;
 
 		if (isset($this->data['handles']['styles']) || isset($this->data['handles']['scripts'])) {
-			// Only fetch the assets information if there is something to be shown
+			// Only fetch the assets' information if there is something to be shown
 			// to avoid useless queries to the database
 			$this->data['assets_info'] = Main::getHandlesInfo();
 			}
@@ -407,17 +391,28 @@ SQL;
 		}
 
 		// 2) For the homepage set as latest posts (e.g. not a single page set as the front page, this is included in the previous check)
-		$globalPageOptions = get_option(WPACU_PLUGIN_ID . '_global_data');
+        $globalPageOptionsList = wpacuGetGlobalData();
 
-		if ($globalPageOptions) {
-			$globalPageOptionsList = @json_decode( $globalPageOptions, true );
-			if ( isset( $globalPageOptionsList['page_options']['homepage'] ) && ! empty( $globalPageOptionsList['page_options']['homepage'] ) ) {
-				$this->data['page_options_results']['homepage'] = array('options' => $globalPageOptionsList['page_options']['homepage']);
-			}
-		}
+        if ( ! empty( $globalPageOptionsList['page_options']['homepage'] ) ) {
+            $this->data['page_options_results']['homepage'] = array('options' => $globalPageOptionsList['page_options']['homepage']);
+        }
 		// [/PAGE OPTIONS]
 
-		Main::instance()->parseTemplate('admin-page-overview', $this->data, true);
+		// [CRITICAL CSS]
+        $this->data['critical_css_disabled'] = $this->data['critical_css_config'] = false;
+
+        if (Main::instance()->settings['critical_css_status'] === 'off') {
+            $this->data['critical_css_disabled'] = true;
+        }
+
+        $criticalCssConfigOption = get_option(WPACU_PLUGIN_ID.'_critical_css_config');
+
+        if ($criticalCssConfigOption) {
+            $this->data['critical_css_config'] = json_decode( $criticalCssConfigOption, ARRAY_A );
+        }
+        // [/CRITICAL CSS]
+
+		MainAdmin::instance()->parseTemplate('admin-page-overview', $this->data, true);
 	}
 
 	/**
@@ -433,64 +428,73 @@ SQL;
 		$handleData = '';
 		$isCoreFile = false; // default
 
+        $assetTypeS = substr($assetType, 0, -1); // "styles" to "style" & "scripts" to "script"
+
         if (isset($data['handles'][$assetType][$handle]) && $data['handles'][$assetType][$handle]) {
             $handleData = $data['handles'][$assetType][$handle];
         }
 
         if ( $for === 'default' ) {
             // Show the original "src" and "ver, not the altered one
-            // (in case filters such as "wpacu_{$handle}_(css|js)_handle_obj" were used to load alternative versions of the file, depending on the situation)
+            // (if filters such as "wpacu_{$handle}_(css|js)_handle_obj" were used to load alternative versions of the file, depending on the situation)
             $srcKey = isset($data['assets_info'][ $assetType ][ $handle ]['src_origin']) ? 'src_origin' : 'src';
 	        $verKey = isset($data['assets_info'][ $assetType ][ $handle ]['ver_origin']) ? 'ver_origin' : 'ver';
 
             $src = (isset( $data['assets_info'][ $assetType ][ $handle ][$srcKey] ) && $data['assets_info'][ $assetType ][ $handle ][$srcKey]) ? $data['assets_info'][ $assetType ][ $handle ][$srcKey] : false;
 
+            $conditionalComment = $conditionalCommentOutput = '';
+
+            if (isset($data['assets_info'][$assetType][$handle]['extra']['conditional']) && $data['assets_info'][$assetType][$handle]['extra']['conditional']) {
+                // Enqueued asset
+                $conditionalComment = $data['assets_info'][$assetType][$handle]['extra']['conditional'];
+            }
+
+            if ($conditionalComment) {
+                $conditionalCommentOutput = '<small>&nbsp;&nbsp;<span><img style="vertical-align: middle;" width="20" height="20" src="'.WPACU_PLUGIN_URL.'/assets/icons/icon-ie.svg" alt="" title="Microsoft / Public domain" />&nbsp;<span style="font-weight: 400; color: #1C87CF;">Loads only in Internet Explorer based on the following condition:</span> <em> if '.$conditionalComment.'</em></span></small>&nbsp;';
+            }
+
             $isExternalSrc = true;
 
-            if (Misc::getLocalSrc($src)
+            if ($assetType === 'styles') {
+                $isBase64EncodedSrc = stripos($src, 'data:text/css;base64,') !== false;
+            } else {
+                $isBase64EncodedSrc = stripos($src, 'data:text/javascript;base64,') !== false;
+            }
+
+            if ($isBase64EncodedSrc
+                || Misc::getLocalSrcIfExist($src)
                 || strpos($src, '/?') !== false // Dynamic Local URL
-                || strpos(str_replace(site_url(), '', $src), '?') === 0 // Starts with ? right after the site url (it's a local URL)
+                || strncmp(str_replace(site_url(), '', $src), '?', 1) === 0 // Starts with ? right after the site url (it's a local URL)
             ) {
                 $isExternalSrc = false;
-                $isCoreFile = Misc::isCoreFile($data['assets_info'][$assetType][$handle]);
+                $isCoreFile = MiscAdmin::isCoreFile($data['assets_info'][$assetType][$handle]);
             }
 
-            if (strpos($src, '/') === 0 && strpos($src, '//') !== 0) {
-                $src = site_url() . $src;
+            if ($isBase64EncodedSrc) {
+                $src = Misc::getHrefFromSource($src);
             }
 
-            if (strpos($src, '/wp-content/plugins/') !== false) {
-                $src = str_replace('/wp-content/plugins/', '/'.Misc::getPluginsDir().'/', $src);
+            $ver = $wp_version; // default
+            if (isset($data['assets_info'][$assetType][$handle][$verKey]) && $data['assets_info'][$assetType][$handle][$verKey]) {
+                $ver = is_array($data['assets_info'][$assetType][$handle][$verKey])
+                    ? implode(',', $data['assets_info'][$assetType][$handle][$verKey])
+                    : $data['assets_info'][$assetType][$handle][$verKey];
             }
-
-	        $ver = $wp_version; // default
-	        if (isset($data['assets_info'][ $assetType ][ $handle ][$verKey] ) && $data['assets_info'][ $assetType ][ $handle ][$verKey] ) {
-		        $ver = is_array($data['assets_info'][ $assetType ][ $handle ][$verKey] )
-			        ? implode(',', $data['assets_info'][ $assetType ][ $handle ][$verKey] )
-			        : $data['assets_info'][ $assetType ][ $handle ][$verKey] ;
-	        }
 	        ?>
             <strong><span style="color: green;"><?php echo esc_html($handle); ?></span></strong>
-		        <small><em>v<?php echo esc_html($ver); ?></em></small>
-		        <?php
+            <small><em>v<?php echo esc_html($ver); ?></em></small>
+            <?php
             if ($isCoreFile) {
-                ?>
+            ?>
                 <span title="WordPress Core File" style="font-size: 15px; vertical-align: middle;" class="dashicons dashicons-wordpress-alt wpacu-tooltip"></span>
                 <?php
             }
-            ?>
-            <?php
-            // [wpacu_pro]
-            // If called from "Bulk Changes" -> "Preloads"
-            $preloadedStatus = isset($data['assets_info'][ $assetType ][ $handle ]['preloaded_status']) ? $data['assets_info'][ $assetType ][ $handle ]['preloaded_status'] : false;
-            if ($preloadedStatus === 'async') { echo '&nbsp;(<strong><em>'.$preloadedStatus.'</em></strong>)'; }
-            // [/wpacu_pro]
 
             $handleExtras = array();
 
             // If called from "Overview"
 	        if (isset($handleData['preloads']) && $handleData['preloads']) {
-		        $handleExtras[0] = '<span style="font-weight: 600;">Preloaded</span>';
+		        $handleExtras[0] = ' / &nbsp;<span style="font-weight: 600;">Preloaded</span>';
 
 	            if ($handleData['preloads'] === 'async') {
 		            $handleExtras[0] .= ' (async)';
@@ -506,25 +510,25 @@ SQL;
 	         * Async, Defer attributes
 	         */
             // Per home page
-	        if (isset($handleData['script_attrs']['home_page']) && ! empty($handleData['script_attrs']['home_page'])) {
+	        if ( ! empty($handleData['script_attrs']['home_page']) ) {
 		        ksort($handleData['script_attrs']['home_page']);
 		        $handleExtras[2] = 'Homepage attributes: <strong>'.esc_html(implode(', ', $handleData['script_attrs']['home_page'])).'</strong>';
 	        }
 
 	        // Date archive pages
-	        if (isset($handleData['script_attrs']['date']) && ! empty($handleData['script_attrs']['date'])) {
+	        if ( ! empty($handleData['script_attrs']['date']) ) {
 		        ksort($handleData['script_attrs']['date']);
 		        $handleExtras[22] = 'Date archive attributes: <strong>'.esc_html(implode(', ', $handleData['script_attrs']['date'])).'</strong>';
 	        }
 
 	        // 404 page
-	        if (isset($handleData['script_attrs']['404']) && ! empty($handleData['script_attrs']['404'])) {
+	        if ( ! empty($handleData['script_attrs']['404']) ) {
 		        ksort($handleData['script_attrs']['404']);
 		        $handleExtras[23] = '404 Not Found attributes: <strong>'.esc_html(implode(', ', $handleData['script_attrs']['404'])).'</strong>';
 	        }
 
 	        // Search results page
-	        if (isset($handleData['script_attrs']['search']) && ! empty($handleData['script_attrs']['search'])) {
+	        if ( ! empty($handleData['script_attrs']['search']) ) {
 		        ksort($handleData['script_attrs']['search']);
 		        $handleExtras[24] = '404 Not Found attributes: <strong>'.esc_html(implode(', ', $handleData['script_attrs']['search'])).'</strong>';
 	        }
@@ -542,7 +546,7 @@ SQL;
 	        }
 
 	        // Per post page
-            if (isset($handleData['script_attrs']['post']) && ! empty($handleData['script_attrs']['post'])) {
+            if ( ! empty($handleData['script_attrs']['post']) ) {
 	            $handleExtras[3] = 'Per post attributes: ';
 
 		        $postsList = '';
@@ -565,7 +569,7 @@ SQL;
 	        }
 
             // User archive page (specific author)
-	        if (isset($handleData['script_attrs']['user']) && ! empty($handleData['script_attrs']['user'])) {
+	        if ( ! empty($handleData['script_attrs']['user']) ) {
 		        $handleExtras[31] = 'Per author page attributes: ';
 
 		        $authorPagesList = '';
@@ -585,7 +589,7 @@ SQL;
 	        }
 
             // Per category page
-            if (isset($handleData['script_attrs']['term']) && ! empty($handleData['script_attrs']['term'])) {
+            if ( ! empty($handleData['script_attrs']['term']) ) {
 	            $handleExtras[33] = 'Per taxonomy attributes: ';
 
                 $taxPagesList = '';
@@ -618,7 +622,7 @@ SQL;
 			        $handleExtras[4] .= '<strong>' . esc_html($attrValue) . '</strong>';
 
 			        // Are there any exceptions? e.g. async, defer unloaded site-wide, but loaded on the homepage
-			        if ( isset( $handleData['attrs_no_load'] ) && ! empty( $handleData['attrs_no_load'] ) ) {
+			        if ( ! empty( $handleData['attrs_no_load'] ) ) {
 				        // $attrSetIn could be 'home_page', 'term', 'user', 'date', '404', 'search'
 				        $handleExtras[4] .= ' <em>(with exceptions from applying added for these pages: ';
 
@@ -740,53 +744,90 @@ SQL;
 	        }
 
             if ( $src ) {
-                $verDb = (isset($data['assets_info'][ $assetType ][ $handle ][$verKey]) && $data['assets_info'][ $assetType ][ $handle ][$verKey]) ? $data['assets_info'][ $assetType ][ $handle ][$verKey] : false;
+                if ( ! $isBase64EncodedSrc ) {
+                    $verDb = (isset($data['assets_info'][ $assetType ][ $handle ][$verKey]) && $data['assets_info'][ $assetType ][ $handle ][$verKey]) ? $data['assets_info'][ $assetType ][ $handle ][$verKey] : false;
+                    $appendAfterSrc = (strpos($src, '?') === false) ? '?' : '&';
 
-		        $appendAfterSrc = (strpos($src, '?') === false) ? '?' : '&';
-
-		        if ( $verDb ) {
-		            if (is_array($verDb)) {
-			            $appendAfterSrc .= http_build_query(array('ver' => $data['assets_info'][ $assetType ][ $handle ][$verKey]));
+                    if ( $verDb ) {
+                        if (is_array($verDb)) {
+                            $appendAfterSrc .= http_build_query(array('ver' => $data['assets_info'][ $assetType ][ $handle ][$verKey]));
+                        } else {
+                            $appendAfterSrc .= 'ver='.$ver;
+                        }
                     } else {
-			            $appendAfterSrc .= 'ver='.$ver;
+                        $appendAfterSrc .= 'ver='.$wp_version; // default
                     }
-		        } else {
-			        $appendAfterSrc .= 'ver='.$wp_version; // default
-		        }
-		        ?>
-                <div><a <?php if ($isExternalSrc) { ?> data-wpacu-external-source="<?php echo esc_attr($src . $appendAfterSrc); ?>" <?php } ?> href="<?php echo esc_attr($src . $appendAfterSrc); ?>" target="_blank"><small><?php echo str_replace( site_url(), '', $src ); ?></small></a> <?php if ($isExternalSrc) { ?><span data-wpacu-external-source-status></span><?php } ?></div>
-                <?php
-	            $maybeInactiveAsset = \WpAssetCleanUp\Misc::maybeIsInactiveAsset($src);
-
-	            if (is_array($maybeInactiveAsset) && ! empty($maybeInactiveAsset)) {
-	                $uniqueStr = md5($handle . $assetType);
-		            $clearAllRulesConfirmMsg = sprintf(esc_attr(__('This will clear all rules (unloads, load exceptions and other settings) for the `%s` CSS handle', 'wp-asset-clean-up')), $handle) . ".\n\n" . esc_attr(__('Click `OK` to confirm the action', 'wp-asset-clean-up')).'!';
-	                ?>
+                    ?>
                     <div>
-                        <?php if ($maybeInactiveAsset['from'] === 'plugin') { ?>
-                            <small><strong>Note:</strong> <span style="color: darkred;">The plugin `<strong><?php echo esc_html($maybeInactiveAsset['name']); ?></strong>` seems to be inactive, thus any rules set are also inactive &amp; irrelevant, unless you re-activate the plugin.</span></small>
-                        <?php } elseif ($maybeInactiveAsset['from'] === 'theme') { ?>
-                            <small><strong>Note:</strong> <span style="color: darkred;">The theme `<strong><?php echo esc_html($maybeInactiveAsset['name']); ?></strong>` seems to be inactive, thus any rules set are also inactive &amp; irrelevant, unless you re-activate the theme.</span></small>
-                        <?php } ?>
-                        <form method="post" action="" style="display: inline-block;">
-                            <input type="hidden" name="wpacu_action" value="clear_all_rules" />
-                            <input type="hidden" name="wpacu_handle" value="<?php echo esc_attr($handle); ?>" />
-                            <input type="hidden" name="wpacu_asset_type" value="<?php echo esc_attr($assetType); ?>" />
-                            <?php echo wp_nonce_field('wpacu_clear_all_rules', 'wpacu_clear_all_rules_nonce'); ?>
-                            <script type="text/javascript">
-                                var wpacuClearAllRulesConfirmMsg_<?php echo $uniqueStr; ?> = '<?php echo esc_js($clearAllRulesConfirmMsg); ?>';
-                            </script>
-                            <button onclick="return confirm(wpacuClearAllRulesConfirmMsg_<?php echo $uniqueStr; ?>);" type="submit" class="button button-secondary"><span class="dashicons dashicons-trash" style="vertical-align: text-bottom;"></span> Clear all rules for this "orphaned" handle</button>
-                        </form>
+                        <a <?php if ($isExternalSrc) { ?> data-wpacu-external-source="<?php echo esc_attr($src . $appendAfterSrc); ?>" <?php } ?> href="<?php echo esc_attr(Misc::getHrefFromSource($src) . $appendAfterSrc); ?>" target="_blank">
+                            <small><?php echo str_replace( site_url(), '', $src ); ?></small>
+                        </a> <?php if ($isExternalSrc) { ?><span data-wpacu-external-source-status></span><?php } ?>
                     </div>
-		            <?php
-	            }
+                    <?php
+                    $maybeInactiveAsset = \WpAssetCleanUp\MiscAdmin::maybeIsInactiveAsset($src);
+
+                    if (is_array($maybeInactiveAsset) && ! empty($maybeInactiveAsset)) {
+                        $uniqueStr = md5($handle . $assetType);
+                        $clearAllRulesConfirmMsg = sprintf(esc_attr(__('This will clear all rules (unloads, load exceptions and other settings) for the `%s` CSS handle', 'wp-asset-clean-up')), $handle) . ".\n\n" . esc_attr(__('Click `OK` to confirm the action', 'wp-asset-clean-up')).'!';
+                        ?>
+                        <div>
+                            <?php if ($maybeInactiveAsset['from'] === 'plugin') { ?>
+                                <small><strong>Note:</strong> <span style="color: darkred;">The plugin `<strong><?php echo esc_html($maybeInactiveAsset['name']); ?></strong>` seems to be inactive, thus any rules set are also inactive &amp; irrelevant, unless you re-activate the plugin.</span></small>
+                            <?php } elseif ($maybeInactiveAsset['from'] === 'theme') { ?>
+                                <small><strong>Note:</strong> <span style="color: darkred;">The theme `<strong><?php echo esc_html($maybeInactiveAsset['name']); ?></strong>` seems to be inactive, thus any rules set are also inactive &amp; irrelevant, unless you re-activate the theme.</span></small>
+                            <?php } ?>
+                            <form method="post" action="" style="display: inline-block;">
+                                <input type="hidden" name="wpacu_action" value="clear_all_rules" />
+                                <input type="hidden" name="wpacu_handle" value="<?php echo esc_attr($handle); ?>" />
+                                <input type="hidden" name="wpacu_asset_type" value="<?php echo esc_attr($assetType); ?>" />
+                                <?php echo wp_nonce_field('wpacu_clear_all_rules', 'wpacu_clear_all_rules_nonce'); ?>
+                                <script type="text/javascript">
+                                    var wpacuClearAllRulesConfirmMsg_<?php echo $uniqueStr; ?> = '<?php echo esc_js($clearAllRulesConfirmMsg); ?>';
+                                </script>
+                                <button onclick="return confirm(wpacuClearAllRulesConfirmMsg_<?php echo $uniqueStr; ?>);" type="submit" class="button button-secondary"><span class="dashicons dashicons-trash" style="vertical-align: text-bottom;"></span> Clear all rules for this "orphaned" handle</button>
+                            </form>
+                        </div>
+                        <?php
+                    }
+                } else {
+                    // Extract base64 encoded data and decode it
+                    if ($assetTypeS === 'style') {
+                        $dataToCheck = 'data:text/css;base64,';
+                        $viewDecodedText = __('View Decoded CSS', 'wp-asset-clean-up');
+                    } else {
+                        $dataToCheck = 'data:text/javascript;base64,';
+                        $viewDecodedText = __('View Decoded JS', 'wp-asset-clean-up');
+                    }
+
+                    $base64Encoded = str_replace($dataToCheck, '', $src);
+                    $decodedSource = base64_decode($base64Encoded);
+
+                    $viewDecodedBase64Unique = 'wpacu-view-decoded-base64-format-' . $assetTypeS . '-' . sha1($src) . '-'. wp_unique_id();
+                    ?>
+                    <div>
+                        <small>
+                            <?php if ($assetTypeS === 'style') { ?>
+                                * The "href" attribute is not pointing to an actual file and contains CSS code in Base64 format (it starts with "<em><?php echo $dataToCheck; ?></em>").
+                            <?php } else { ?>
+                                * The "src" attribute is not pointing to an actual file and contains JavaScript code in Base64 format (it starts with "<em><?php echo $dataToCheck; ?></em>").
+                            <?php } ?>
+                            <a data-wpacu-modal-target="<?php echo $viewDecodedBase64Unique; ?>-target" href="#<?php echo $viewDecodedBase64Unique; ?>"><?php echo $viewDecodedText; ?></a>
+                        </small>
+                    </div>
+                    <div id="<?php echo $viewDecodedBase64Unique; ?>" class="wpacu-modal" style="padding-top: 100px;">
+                        <div class="wpacu-modal-content">
+                            <span class="wpacu-close">&times;</span>
+                            <pre><code><?php echo $decodedSource; ?></code></pre>
+                        </div>
+                    </div>
+                <?php }
             }
+
 
             // Any note?
             if (isset($handleData['notes']) && $handleData['notes']) {
                 ?>
-                <div><small><span class="dashicons dashicons-welcome-write-blog" style="vertical-align: middle;"></span> Note: <em><?php echo ucfirst(htmlspecialchars($data['handles'][$assetType][$handle]['notes'])); ?></em></small></div>
+                <div><small><span class="dashicons dashicons-welcome-write-blog" style="vertical-align: middle;"></span> Note: <em><?php echo ucfirst(htmlspecialchars($handleData['notes'])); ?></em></small></div>
                 <?php
             }
             ?>
@@ -801,8 +842,8 @@ SQL;
 	 */
 	public static function renderHandleChangesOutput($handleData)
 	{
-		$handleChangesOutput = array();
-		$anyUnloadRule = false; // default (turns to true if at least an unload rule is set)
+		$handleChangesOutput  = array();
+		$anyUnloadRule        = false; // default (turns to true if at least an unload rule is set)
 		$anyLoadExceptionRule = false; // default (turns to true if any load exception rule is set)
 
 		// It could turn to "true" IF the site-wide rule is turned ON and there are other unload rules on top of it (useless ones in this case)
@@ -822,8 +863,7 @@ SQL;
 				foreach ($handleData['unload_bulk']['post_type'] as $postType) {
                     $textToShow = 'Unloaded on all pages of <strong>' . $postType . '</strong> post type';
 
-                    $handleChangesOutput['bulk'] .= ' <span style="color: #cc0000;">'.$textToShow.'</span>'.
-                                                    self::anyNoPostTypeEntriesMsg($postType).', ';
+                    $handleChangesOutput['bulk'] .= ' <span style="color: #cc0000;">'. $textToShow . self::anyNoPostTypeEntriesMsg($postType).'</span>, ';
 
 					$anyUnloadRule = true;
 				}
@@ -849,13 +889,13 @@ SQL;
         }
 
 		if (isset($handleData['load_exception_on_home_page']) && $handleData['load_exception_on_home_page']) {
-			$handleChangesOutput['load_exception_on_home_page'] = '<span style="color: green;">Loaded (as an exception)</span> on the <a target="_blank" href="'.Misc::getPageUrl(0).'">homepage</a>';
+			$handleChangesOutput['load_exception_on_home_page'] = '<span style="color: green;">Loaded (as an exception) on the <a target="_blank" href="'.Misc::getPageUrl(0).'">homepage</a></span>';
 			$anyLoadExceptionRule = true;
 		}
 
 		// On this page: post, page, custom post type
 		if (isset($handleData['unload_on_this_page']['post'])) {
-			$handleChangesOutput['on_this_post'] = '<span style="color: #cc0000;">Unloaded in the following posts:</span> ';
+			$handleChangesOutput['on_this_post'] = '<span style="color: #cc0000;">Unloaded in the following posts: ';
 
 			$postsList = '';
 
@@ -881,7 +921,7 @@ SQL;
                 }
 			}
 
-			$handleChangesOutput['on_this_post'] .= rtrim($postsList, ', ');
+			$handleChangesOutput['on_this_post'] .= rtrim($postsList, ', ') . '</span>';
 
 			if (isset($handleChangesOutput['site_wide'])) {
 				$handleChangesOutput['on_this_post'] .= ' * <em>unnecessary, as it\'s already unloaded site-wide</em>';
@@ -908,7 +948,7 @@ var wpacuClearRedundantUnloadRulesConfirmMsg_{$uniqueDelimiter} = "{$clearRedund
 <button onclick="return confirm(wpacuClearRedundantUnloadRulesConfirmMsg_{$uniqueDelimiter});" type="submit" class="button button-secondary"><span class="dashicons dashicons-trash" style="vertical-align: text-bottom;"></span> Clear all redundant unload rules</button>
 </form>
 HTML;
-			$handleChangesOutput['has_redundant_unload_rules'] = $clearRedundantUnloadRulesArea;
+			$handleChangesOutput['has_redundant_rules'] = $clearRedundantUnloadRulesArea;
 		}
 
 		if (isset($handleData['ignore_child']) && $handleData['ignore_child']) {
@@ -916,8 +956,8 @@ HTML;
 		}
 
 		// Load exceptions? Per page, via RegEx, if user is logged-in
-		if (isset($handleData['load_exception_on_this_page']['post'])) {
-			$handleChangesOutput['load_exception_on_this_post'] = '<span style="color: green;">Loaded (as an exception)</span> in the following posts: ';
+		if ( ! empty($handleData['load_exception_on_this_page']['post']) ) {
+			$handleChangesOutput['load_exception_on_this_post'] = '<span style="color: green;">Loaded (as an exception) in the following posts: ';
 
 			$postsList = '';
 
@@ -935,7 +975,7 @@ HTML;
                 }
 			}
 
-			$handleChangesOutput['load_exception_on_this_post'] .= rtrim($postsList, ', ');
+			$handleChangesOutput['load_exception_on_this_post'] .= rtrim($postsList, ', ') . '</span>';
 			$anyLoadExceptionRule = true;
 		}
 
@@ -957,7 +997,7 @@ HTML;
 
 		if (isset($handleData['load_it_logged_in']) && $handleData['load_it_logged_in']) {
 			if ($anyLoadExceptionRule) {
-				$textToShow = ' <strong>or</strong> if the user is logged-in';
+				$textToShow = ' <strong>or</strong> <span style="color: green;">if the user is logged-in</span>';
 			} else {
 				$textToShow = '<span style="color: green;">Loaded (as an exception)</span> if the user is logged-in';
 			}

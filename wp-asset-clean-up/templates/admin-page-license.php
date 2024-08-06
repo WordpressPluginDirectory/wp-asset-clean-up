@@ -6,10 +6,10 @@ if (! isset($data)) {
     exit;
 }
 
-include_once '_top-area.php';
+include_once WPACU_PLUGIN_DIR . '/templates/_top-area.php';
 ?>
+<!-- [wpacu_lite] -->
 <div class="wpacu-wrap">
-
     <p><?php echo sprintf(
             __('You\'re using the lite version of %s (v%s), so no license key is needed. You\'ll receive automatic notifications whenever a new version is available for download.', 'wp-asset-clean-up'),
             WPACU_PLUGIN_TITLE,
@@ -31,3 +31,4 @@ include_once '_top-area.php';
         <div class="wpacu_clearfix"></div>
     </div>
 </div>
+<!-- [/wpacu_lite] -->

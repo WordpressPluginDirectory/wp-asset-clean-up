@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Abstract minifier class.
  *
@@ -10,10 +9,10 @@
  * @license MIT License
  */
 
-namespace MatthiasMullie\Minify;
+namespace MatthiasMullieWpacu\Minify;
 
-use MatthiasMullie\Minify\Exceptions\IOException;
-use Psr\Cache\CacheItemInterface;
+use MatthiasMullieWpacu\Minify\Exceptions\IOException;
+use PsrWpacu\Cache\CacheItemInterface;
 
 /**
  * Abstract minifier class.
@@ -50,6 +49,34 @@ abstract class Minify
      * @var string[]
      */
     public $extracted = array();
+
+    // [Gabe Livan]
+    /**
+     * If $paramType is not "content", then is_file() will be used to check if it's a file
+     * This is useful as Asset CleanUp Pro only uses "content" and is_file() could trigger errors such as "open_basedir restriction in effect"
+     *
+     * @var string
+     */
+    protected $paramType = '';
+
+    /**
+     * @param $value
+     *
+     * @return void
+     */
+    public function setParamType($value)
+    {
+        $this->paramType = $value;
+    }
+
+    /**
+     * @return string
+     */
+    public function getParamType()
+    {
+        return $this->paramType;
+    }
+    // [/Gabe Livan]
 
     /**
      * Init the minify class - optionally, code may be passed along already.
@@ -270,7 +297,7 @@ abstract class Minify
         $minifier = $this;
         $callback = function ($match) use ($minifier) {
             $count = count($minifier->extracted);
-            $placeholder = '/*'.$count.'*/';
+            $placeholder = '/*' . $count . '*/';
             $minifier->extracted[$placeholder] = $match[0];
 
             return $placeholder;
@@ -491,17 +518,29 @@ abstract class Minify
      */
     protected function canImportFile($path)
     {
+        // [Gabe Livan]
+        if (method_exists($this, 'getParamType') && $this->getParamType() === 'content') {
+            return false;
+        }
+        // [/Gabe Livan]
+
         $parsed = parse_url($path);
         if (
             // file is elsewhere
-            isset($parsed['host']) ||
+            isset($parsed['host'])
             // file responds to queries (may change, or need to bypass cache)
-            isset($parsed['query'])
+            || isset($parsed['query'])
         ) {
             return false;
         }
 
-        return strlen($path) < PHP_MAXPATHLEN && @is_file($path) && is_readable($path);
+        try {
+            return strlen($path) < PHP_MAXPATHLEN && @is_file($path) && is_readable($path);
+        }
+        // catch openbasedir exceptions which are not caught by @ on is_file()
+        catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**
@@ -534,9 +573,9 @@ abstract class Minify
     protected function writeToFile($handler, $content, $path = '')
     {
         if (
-            !is_resource($handler) ||
-            ($result = @fwrite($handler, $content)) === false ||
-            ($result < strlen($content))
+            !is_resource($handler)
+            || ($result = @fwrite($handler, $content)) === false
+            || ($result < strlen($content))
         ) {
             throw new IOException('The file "' . $path . '" could not be written to. Check your disk space and file permissions.');
         }

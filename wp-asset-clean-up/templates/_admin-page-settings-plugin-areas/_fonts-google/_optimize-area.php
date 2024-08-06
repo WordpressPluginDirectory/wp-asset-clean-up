@@ -1,4 +1,7 @@
 <?php
+
+use WpAssetCleanUp\Misc;
+
 if (! isset($data, $ddOptions)) {
 	exit;
 }
@@ -66,7 +69,7 @@ if ($data['google_fonts_remove']) {
 						<li>
 							<code>
 								<?php
-                                $typeAttr = \WpAssetCleanUp\Misc::getScriptTypeAttribute();
+                                $typeAttr = Misc::getScriptTypeAttribute();
 								$asyncWebFontLoaderSnippet = <<<HTML
 &lt;script id='wpacu-google-fonts-async-load' {$typeAttr}&gt;
 WebFontConfig = { google: { families: ['Droid+Sans', 'Inconsolata:bold'] } };
@@ -136,7 +139,7 @@ HTML;
 			&nbsp;
 			<?php _e('This feature applies site-wide "&display=" with the chosen value to all the Google Font URL requests (if the parameter is not already set in the URL).', 'wp-asset-clean-up'); ?>
 			<?php _e('This will result in printing of "font-display" CSS property within @font-face.', 'wp-asset-clean-up'); ?>
-			<span style="color: #0073aa;" class="dashicons dashicons-info"></span> <a id="wpacu-google-fonts-display-info-target" href="#wpacu-google-fonts-display-info"><?php _e('Read more', 'wp-asset-clean-up'); ?></a>
+			<span style="color: #0073aa;" class="dashicons dashicons-info"></span> <a data-wpacu-modal-target="wpacu-google-fonts-display-info-target" href="#wpacu-google-fonts-display-info"><?php _e('Read more', 'wp-asset-clean-up'); ?></a>
 
 			<hr />
 			<ul>

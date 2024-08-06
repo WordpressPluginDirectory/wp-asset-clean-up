@@ -1,4 +1,6 @@
 <?php
+/** @noinspection PhpUndefinedFunctionInspection */
+
 namespace WpAssetCleanUp;
 
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
@@ -73,9 +75,8 @@ class Plugin
 	 */
 	public function whenActivated()
 	{
-	    if (WPACU_WRONG_PHP_VERSION === 'true') {
-		    $recordMsg = __( '"Asset CleanUp" plugin has not been activated because the PHP version used on this server is below 5.6.',
-			    'wp-asset-clean-up' );
+	    if (wpacuGetConstant('WPACU_WRONG_PHP_VERSION') === 'true') {
+		    $recordMsg = __( '"Asset CleanUp Pro" plugin has not been activated because the PHP version used on this server is below 5.6.', 'wp-asset-clean-up' );
 		    deactivate_plugins( WPACU_PLUGIN_BASE );
 		    error_log( $recordMsg );
 		    wp_die($recordMsg);
@@ -83,12 +84,17 @@ class Plugin
 
 		// Prepare for the redirection to the WPACU_ADMIN_PAGE_ID_START plugin page
         // If there is no record that the plugin was already activated at least once
-		if ( ! get_option(WPACU_PLUGIN_ID.'_first_usage') ) {
+		if ( ! get_option(WPACU_PLUGIN_ID . '_first_usage') ) {
 			set_transient(WPACU_PLUGIN_ID . '_redirect_after_activation', 1, 15);
 
 			// Make a record when Asset CleanUp (Pro) is used for the first time
 			// In case this is the first time the plugin is activated
 			self::triggerFirstUsage();
+
+            if ( ! get_option(WPACU_PLUGIN_ID . '_settings') ) {
+                $wpacuSettingsAdmin = new SettingsAdmin();
+                $wpacuSettingsAdmin->updateSettingsInDbWithDefaultValues();
+            }
 		}
 
 		/**
@@ -345,102 +351,5 @@ HTACCESS;
 	public static function triggerFirstUsage()
 	{
         Misc::addUpdateOption(WPACU_PLUGIN_ID . '_first_usage', time());
-	}
-
-	/**
-     * This works like /?wpacu_no_load with a fundamental difference:
-     * It needs to be triggered through a very early 'init' / 'setup_theme' action hook after all plugins are loaded, thus it can't be used in /early-triggers.php
-     * e.g. in situations when the page is an AMP one, prevent any changes to the HTML source by Asset CleanUp (Pro)
-     *
-	 * @param string $tagActionName
-     * @param string $htmlSource
-	 *
-	 * @return bool
-	 */
-	public static function preventAnyFrontendOptimization($tagActionName = '', $htmlSource = '')
-	{
-		// Only relevant if all the plugins are already loaded
-		// and in the front-end view
-		if (! defined('WPACU_ALL_ACTIVE_PLUGINS_LOADED') || is_admin()) {
-			return false;
-		}
-
-		// Perhaps the editor from "Pro" (theme.co) is on
-		if (apply_filters('wpacu_prevent_any_frontend_optimization', false)) {
-			return true;
-		}
-
-		// e.g. /amp/ - /amp? - /amp/? - /?amp or ending in /amp
-		$isAmpInRequestUri = ( (isset($_SERVER['REQUEST_URI']) && (preg_match('/(\/amp$|\/amp\?)|(\/amp\/|\/amp\/\?)/', $_SERVER['REQUEST_URI'])))
-                               || isset($_GET['amp']) );
-
-		// Is it an AMP endpoint?
-		if ( ($isAmpInRequestUri && Misc::isPluginActive('accelerated-mobile-pages/accelerated-mobile-pages.php')) // "AMP for WP – Accelerated Mobile Pages"
-		     || ($isAmpInRequestUri && Misc::isPluginActive('amp/amp.php')) // "AMP – WordPress plugin"
-		     || ((function_exists('is_wp_amp') && Misc::isPluginActive('wp-amp/wp-amp.php') && is_wp_amp())) // "WP AMP — Accelerated Mobile Pages for WordPress and WooCommerce" (Premium plugin)
-		) {
-			return true; // do not print anything on an AMP page
-		}
-
-		// Some pages are AMP but their URI does not end in /amp
-		if ( ! defined('WPACU_DO_EXTRA_CHECKS_FOR_AMP') &&
-             ( Misc::isPluginActive('accelerated-mobile-pages/accelerated-mobile-pages.php')
-		        || Misc::isPluginActive('amp/amp.php')
-		        || Misc::isPluginActive('wp-amp/wp-amp.php') )
-		) {
-			define('WPACU_DO_EXTRA_CHECKS_FOR_AMP', true);
-		}
-
-		if ( isset($_GET['wpacu_clean_load']) ) {
-			return true;
-		}
-
-		// $tagActionName needs to be different from 'parse_query' because is_singular() would trigger too soon and cause notice errors
-		// Has the following page option set: "Do not apply any front-end optimization on this page (this includes any changes related to CSS/JS files)"
-		if ($tagActionName !== 'parse_query' && MetaBoxes::hasNoFrontendOptimizationPageOption()) {
-			return true;
-		}
-
-		// e.g. it could be JS content loaded dynamically such as /?wpml-app=ate-widget
-        // in this case, any Asset CleanUp alteration of the content should be avoided
-        // often, the code below is not reached as extra measures are taken before if well known plugins are used
-        if ($htmlSource !== '') {
-	        $startsWithPassed = $endsWithPassed = false;
-
-            // More common delimiters can be added with time
-            // This is just an extra measure to prevent possible empty pages due to lots of memory used in case a possible JavaScript output is too large
-	        $startsWithAnyFromTheList = array(
-		        '/*!',
-		        '(function()'
-	        );
-
-	        $endsWithAnyFromTheList = array(
-		        ');',
-                ')'
-	        );
-
-            // Possible JS content
-            foreach ($startsWithAnyFromTheList as $startsWithString) {
-                if (substr(trim($htmlSource), 0, strlen($startsWithString)) === $startsWithString) {
-	                $startsWithPassed = true;
-                    break;
-                }
-            }
-
-            if ($startsWithPassed) {
-	            foreach ($endsWithAnyFromTheList as $endsWithString) {
-		            if (substr(trim($htmlSource), -strlen($endsWithString)) === $endsWithString) {
-			            $endsWithPassed = true;
-			            break;
-		            }
-	            }
-            }
-
-            if ($startsWithPassed && $endsWithPassed) {
-                return true;
-            }
-        }
-
-		return false;
 	}
 }

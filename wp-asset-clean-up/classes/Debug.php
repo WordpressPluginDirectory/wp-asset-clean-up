@@ -14,11 +14,12 @@ class Debug
 	 */
 	public function __construct()
 	{
-		if (isset($_GET['wpacu_debug'])) {
-			add_action('wp_footer', array($this, 'showDebugOptionsFront'), PHP_INT_MAX);
-		}
+		if ( isset($_GET['wpacu_debug']) && ! is_admin() ) {
+            add_action('wp_footer', array($this, 'showDebugOptionsFront'), PHP_INT_MAX);
 
-		foreach(array('wp', 'admin_init') as $wpacuActionHook) {
+            }
+
+		foreach( array('wp', 'admin_init') as $wpacuActionHook ) {
 			add_action( $wpacuActionHook, static function() {
 				if (isset( $_GET['wpacu_get_cache_dir_size'] ) && Menu::userCanManageAssets()) {
 					self::printCacheDirInfo();
@@ -31,7 +32,7 @@ class Debug
                 }
 
 				if (isset($_GET['wpacu_remove_already_minified']) && Menu::userCanManageAssets()) {
-					echo '<pre>'; print_r(OptimizeCommon::removeAlreadyMarkedAsMinified()); echo '</pre>';
+					echo '<pre>'; OptimizeCommon::removeAlreadyMarkedAsMinified(); echo '</pre>';
 					exit();
 				}
 
@@ -42,6 +43,125 @@ class Debug
 				}
 			} );
 		}
+	}
+
+    /**
+     * @param $wpacuCacheKey
+     *
+     * @return array
+     */
+    public static function getTimingValues($wpacuCacheKey)
+    {
+        $wpacuExecTiming = ObjectCache::wpacu_cache_get( $wpacuCacheKey, 'wpacu_exec_time' ) ?: 0;
+
+        $wpacuExecTimingMs = $wpacuExecTiming;
+
+        $wpacuTimingFormatMs = str_replace('.00', '', number_format($wpacuExecTimingMs, 2));
+        $wpacuTimingFormatS  = str_replace(array('.00', ','), '', number_format(($wpacuExecTimingMs / 1000), 3));
+
+        return array('ms' => $wpacuTimingFormatMs, 's' => $wpacuTimingFormatS);
+    }
+
+    /**
+     * @param $timingKey
+     * @param $htmlSource
+     *
+     * @return string|string[]
+     */
+    public static function printTimingFor($timingKey, $htmlSource)
+    {
+        $wpacuCacheKey       = 'wpacu_' . $timingKey . '_exec_time';
+        $timingValues        = self::getTimingValues( $wpacuCacheKey);
+        $wpacuTimingFormatMs = $timingValues['ms'];
+        $wpacuTimingFormatS  = $timingValues['s'];
+
+        return str_replace(
+            array(
+                '{' . $wpacuCacheKey . '}',
+                '{' . $wpacuCacheKey . '_sec}'
+            ),
+
+            array(
+                $wpacuTimingFormatMs . 'ms',
+                $wpacuTimingFormatS . 's',
+            ), // clean it up
+
+            $htmlSource
+        );
+    }
+
+	/**
+	 * @param $htmlSource
+     *
+	 * @return string|string[]
+	 */
+	public static function applyDebugTiming($htmlSource)
+	{
+		$timingKeys = array(
+			'prepare_optimize_files_css',
+			'prepare_optimize_files_js',
+
+			// All HTML alteration via "wp_loaded" action hook
+			'alter_html_source',
+
+			// HTML CleanUp
+			'alter_html_source_cleanup',
+			'alter_html_source_for_remove_html_comments',
+			'alter_html_source_for_remove_meta_generators',
+
+			// CSS
+			'alter_html_source_for_optimize_css',
+			'alter_html_source_unload_ignore_deps_css',
+			'alter_html_source_for_google_fonts_optimization_removal',
+			'alter_html_source_for_inline_css',
+
+			'alter_html_source_original_to_optimized_css',
+			'alter_html_source_for_preload_css',
+
+			'alter_html_source_for_combine_css',
+			'alter_html_source_for_minify_inline_style_tags',
+
+            'alter_html_source_for_local_fonts_display_style_inline',
+
+			'alter_html_source_for_optimize_css_final_cleanups',
+
+			// JS
+			'alter_html_source_for_optimize_js',
+			'alter_html_source_maybe_move_jquery_after_body_tag',
+			'alter_html_source_unload_ignore_deps_js',
+
+			'alter_html_source_original_to_optimized_js',
+			'alter_html_source_for_preload_js',
+
+			'alter_html_source_for_combine_js',
+
+			'alter_html_source_move_inline_jquery_after_src_tag',
+			'alter_html_source_for_optimize_js_final_cleanups',
+
+            'alter_html_source_strip_any_references_for_unloaded_assets',
+
+			'fetch_strip_hardcoded_assets',
+			'fetch_all_hardcoded_assets',
+
+			'output_css_js_manager',
+
+			'style_loader_tag',
+			'script_loader_tag',
+
+			'style_loader_tag_preload_css',
+			'script_loader_tag_preload_js',
+
+			'style_loader_tag_pro_changes',
+			'script_loader_tag_pro_changes',
+
+            'all_timings'
+		);
+
+		foreach ( $timingKeys as $timingKey ) {
+            $htmlSource = self::printTimingFor($timingKey, $htmlSource);
+		}
+
+		return $htmlSource;
 	}
 
 	/**
@@ -63,6 +183,7 @@ class Debug
 			'wpacu_no_css_combine' => 'Do not combine any CSS',
 
 			'wpacu_no_css_preload_basic' => 'Do not preload any CSS (Basic)',
+
             // [/For CSS]
 
 			// [For JS]
@@ -98,14 +219,17 @@ class Debug
                             foreach ($allDebugOptions as $debugKey => $debugText) {
                             ?>
                                 <li>
-                                    <label><input type="checkbox"
-                                                  name="<?php echo esc_attr($debugKey); ?>"
-                                                  <?php if ( ! empty($_GET) && array_key_exists($debugKey, $_GET) ) { echo 'checked="checked"'; } ?> /> &nbsp;<?php echo esc_html($debugText); ?></label>
+                                    <label>
+                                        <input type="checkbox"
+                                           name="<?php echo esc_attr($debugKey); ?>"
+                                           <?php if ( isset($_REQUEST[$debugKey]) ) { echo 'checked="checked"'; } ?> /> &nbsp;<?php echo esc_html($debugText); ?>
+                                    </label>
                                 </li>
                             <?php
                             }
                             ?>
                             </ul>
+
                             <div>
                                 <input type="submit"
                                        value="Preview this page with the changes made above" />
@@ -113,7 +237,7 @@ class Debug
                             <input type="hidden" name="wpacu_debug" value="on" />
                         </form>
                     </td>
-                    <td>
+                    <td style="vertical-align: top;">
 	                    <div style="margin: 0 0 10px; padding: 10px 0;">
 	                        <strong>CSS handles marked for unload:</strong>&nbsp;
 	                        <?php
@@ -149,13 +273,31 @@ class Debug
 
                         <div style="margin: 0 0 10px; padding: 10px 0;">
 							<ul style="list-style: none; padding-left: 0;">
-                                <li style="margin-bottom: 10px;">Dequeue any chosen styles (.css): <?php echo Misc::printTimingFor('filter_dequeue_styles',  '{wpacu_filter_dequeue_styles_exec_time} ({wpacu_filter_dequeue_styles_exec_time_sec})'); ?></li>
-                                <li style="margin-bottom: 20px;">Dequeue any chosen scripts (.js): <?php echo Misc::printTimingFor('filter_dequeue_scripts', '{wpacu_filter_dequeue_scripts_exec_time} ({wpacu_filter_dequeue_scripts_exec_time_sec})'); ?></li>
+                                <script>
+                                    jQuery(document).ready(function($) {
+                                        let valueNum = 0;
 
-                                <li style="margin-bottom: 10px;">Prepare CSS files to optimize: {wpacu_prepare_optimize_files_css_exec_time} ({wpacu_prepare_optimize_files_css_exec_time_sec})</li>
-                                <li style="margin-bottom: 20px;">Prepare JS files to optimize: {wpacu_prepare_optimize_files_js_exec_time} ({wpacu_prepare_optimize_files_js_exec_time_sec})</li>
+                                        $('[data-wpacu-count-it]').each(function(index, value) {
+                                            let extractedNumber = parseFloat($(this).attr("data-wpacu-count-it").replace('ms', ''));
+                                            console.log(extractedNumber);
 
-                                <li style="margin-bottom: 10px;">OptimizeCommon - HTML alteration via <em>wp_loaded</em>: {wpacu_alter_html_source_exec_time} ({wpacu_alter_html_source_exec_time_sec})
+                                            valueNum += extractedNumber;
+                                        });
+
+                                        valueNum = valueNum.toFixed(2);
+
+                                        $('#wpacu-total-all-timings').html(valueNum);
+                                        });
+                                </script>
+                                <li style="margin-bottom: 15px; border-bottom: 1px solid #e7e7e7;"><strong>Total timing for all recorded actions:</strong> <span id="wpacu-total-all-timings"></span>ms</li>
+
+                                <li style="margin-bottom: 10px;" data-wpacu-count-it="<?php echo self::printTimingFor('filter_dequeue_styles',  '{wpacu_filter_dequeue_styles_exec_time}'); ?>">Dequeue any chosen styles (.css): <?php echo self::printTimingFor('filter_dequeue_styles',  '{wpacu_filter_dequeue_styles_exec_time} ({wpacu_filter_dequeue_styles_exec_time_sec})'); ?></li>
+                                <li style="margin-bottom: 20px;" data-wpacu-count-it="<?php echo self::printTimingFor('filter_dequeue_scripts',  '{wpacu_filter_dequeue_scripts_exec_time}'); ?>">Dequeue any chosen scripts (.js): <?php echo self::printTimingFor('filter_dequeue_scripts', '{wpacu_filter_dequeue_scripts_exec_time} ({wpacu_filter_dequeue_scripts_exec_time_sec})'); ?></li>
+
+                                <li style="margin-bottom: 10px;" data-wpacu-count-it="{wpacu_prepare_optimize_files_css_exec_time}">Prepare CSS files to optimize: {wpacu_prepare_optimize_files_css_exec_time} ({wpacu_prepare_optimize_files_css_exec_time_sec})</li>
+                                <li style="margin-bottom: 20px;" data-wpacu-count-it="{wpacu_prepare_optimize_files_js_exec_time}">Prepare JS files to optimize: {wpacu_prepare_optimize_files_js_exec_time} ({wpacu_prepare_optimize_files_js_exec_time_sec})</li>
+
+                                <li style="margin-bottom: 10px;" data-wpacu-count-it="{wpacu_alter_html_source_exec_time}">OptimizeCommon - HTML alteration via <em>wp_loaded</em>: {wpacu_alter_html_source_exec_time} ({wpacu_alter_html_source_exec_time_sec})
                                     <ul id="wpacu-debug-timing">
                                         <li style="margin-top: 10px; margin-bottom: 10px;">&nbsp;OptimizeCSS: {wpacu_alter_html_source_for_optimize_css_exec_time} ({wpacu_alter_html_source_for_optimize_css_exec_time_sec})
                                             <ul>
@@ -163,36 +305,51 @@ class Debug
                                                 <li>From CSS file to Inline: {wpacu_alter_html_source_for_inline_css_exec_time}</li>
                                                 <li>Update Original to Optimized: {wpacu_alter_html_source_original_to_optimized_css_exec_time}</li>
                                                 <li>Preloads: {wpacu_alter_html_source_for_preload_css_exec_time}</li>
+
                                                 <!-- -->
+
                                                 <li>Combine: {wpacu_alter_html_source_for_combine_css_exec_time}</li>
                                                 <li>Minify Inline Tags: {wpacu_alter_html_source_for_minify_inline_style_tags_exec_time}</li>
                                                 <li>Unload (ignore dependencies): {wpacu_alter_html_source_unload_ignore_deps_css_exec_time}</li>
+                                                <li>Alter Inline CSS (font-display): {wpacu_alter_html_source_for_local_fonts_display_style_inline_exec_time}</li>
+                                                <li>Final Cleanups for the HTML source: {wpacu_alter_html_source_for_optimize_css_final_cleanups_exec_time}</li>
                                             </ul>
                                         </li>
 
-                                        <li>OptimizeJs: {wpacu_alter_html_source_for_optimize_js_exec_time} ({wpacu_alter_html_source_for_optimize_js_exec_time_sec})
+                                        <li style="margin-top: 10px; margin-bottom: 10px;">OptimizeJs: {wpacu_alter_html_source_for_optimize_js_exec_time} ({wpacu_alter_html_source_for_optimize_js_exec_time_sec})
                                             <ul>
                                                 <li>Update Original to Optimized: {wpacu_alter_html_source_original_to_optimized_js_exec_time}</li>
                                                 <li>Preloads: {wpacu_alter_html_source_for_preload_js_exec_time}</li>
                                                 <!-- -->
+
                                                 <li>Combine: {wpacu_alter_html_source_for_combine_js_exec_time}</li>
+
+                                                <li>Move jQuery within the BODY tag: {wpacu_alter_html_source_maybe_move_jquery_after_body_tag_exec_time}</li>
                                                 <li>Unload (ignore dependencies): {wpacu_alter_html_source_unload_ignore_deps_js_exec_time}</li>
-                                                <li>Move any inline wih jQuery code after jQuery library: {wpacu_alter_html_source_move_inline_jquery_after_src_tag_exec_time}</li>
+                                                <li>Move any inline with jQuery code after jQuery library: {wpacu_alter_html_source_move_inline_jquery_after_src_tag_exec_time}</li>
+                                                <li>Final Cleanups for the HTML source: {wpacu_alter_html_source_for_optimize_js_final_cleanups_exec_time}</li>
                                             </ul>
                                         </li>
+
+                                        <li>Strip any references for unloaded assets: {wpacu_alter_html_source_strip_any_references_for_unloaded_assets_exec_time}</li>
+
                                         <li>HTML CleanUp: {wpacu_alter_html_source_cleanup_exec_time}
                                             <ul>
                                                 <li>Strip HTML Comments: {wpacu_alter_html_source_for_remove_html_comments_exec_time}</li>
-	                                            <li>Remove Generator Meta Tags: {wpacu_alter_html_source_for_remove_meta_generators_exec_time}</li>
+	                                            <li>Remove Generator META tags: {wpacu_alter_html_source_for_remove_meta_generators_exec_time}</li>
                                             </ul>
                                         </li>
                                     </ul>
                                 </li>
 
-								<li style="margin-bottom: 10px;">Output CSS &amp; JS Management List: {wpacu_output_css_js_manager_exec_time} ({wpacu_output_css_js_manager_exec_time_sec})</li>
+								<li style="margin-bottom: 10px;" data-wpacu-count-it="{wpacu_output_css_js_manager_exec_time}">Output CSS &amp; JS Management List: {wpacu_output_css_js_manager_exec_time} ({wpacu_output_css_js_manager_exec_time_sec})</li>
 
-                                <!-- -->
-							</ul>
+                                <li style="margin-bottom: 10px;" data-wpacu-count-it="{wpacu_style_loader_tag_exec_time}">"style_loader_tag" filters: {wpacu_style_loader_tag_exec_time} ({wpacu_style_loader_tag_exec_time_sec})</li>
+                                <li style="margin-bottom: 10px;" data-wpacu-count-it="{wpacu_script_loader_tag_exec_time}">"script_loader_tag" filters: {wpacu_script_loader_tag_exec_time} ({wpacu_script_loader_tag_exec_time_sec})</li>
+
+								<li style="margin-bottom: 10px;" data-wpacu-count-it="{wpacu_style_loader_tag_preload_css_exec_time}">"style_loader_tag" filters (Preload CSS): {wpacu_style_loader_tag_preload_css_exec_time} ({wpacu_style_loader_tag_preload_css_exec_time_sec})</li>
+								<li style="margin-bottom: 10px;" data-wpacu-count-it="{wpacu_script_loader_tag_preload_js_exec_time}">"script_loader_tag" filters (Preload JS): {wpacu_script_loader_tag_preload_js_exec_time} ({wpacu_script_loader_tag_preload_js_exec_time_sec})</li>
+                            </ul>
 	                    </div>
                     </td>
                 </tr>
@@ -222,8 +379,7 @@ class Debug
 			    echo '<span style="color: green;">The '.wp_kses($printCacheDirOutput, array('em' => array(), 'strong' => array())).' directory is <em>writable</em>.</span>' . '<br /><br />';
 		    }
 
-		    $dirItems = new \RecursiveDirectoryIterator( $assetCleanUpCacheDir,
-			    \RecursiveDirectoryIterator::SKIP_DOTS );
+		    $dirItems = new \RecursiveDirectoryIterator( $assetCleanUpCacheDir, \RecursiveDirectoryIterator::SKIP_DOTS );
 
 		    $totalFiles = 0;
 		    $totalSize  = 0;
@@ -232,6 +388,8 @@ class Debug
 			    new \RecursiveIteratorIterator( $dirItems, \RecursiveIteratorIterator::SELF_FIRST,
 				    \RecursiveIteratorIterator::CATCH_GET_CHILD ) as $item
 		    ) {
+			    $appendAfter = '';
+
 			    if ($item->isDir()) {
 			    	echo '<br />';
 
@@ -243,7 +401,7 @@ class Debug
 					    $appendAfter .= ' <em><strong style="color: red;">not writable</strong> directory</em>';
 				    }
 			    } elseif ($item->isFile()) {
-			    	$appendAfter = '(<em>'.Misc::formatBytes($item->getSize()).'</em>)';
+			    	$appendAfter = '(<em>'.MiscAdmin::formatBytes($item->getSize()).'</em>)';
 
 			    	echo '&nbsp;-&nbsp;';
 			    }
@@ -263,11 +421,12 @@ class Debug
 			    }
 		    }
 
-		    echo '<br />'.'Total Files: <strong>'.$totalFiles.'</strong> / Total Size: <strong>'.Misc::formatBytes($totalSize).'</strong>';
+		    echo '<br />'.'Total Files: <strong>'.$totalFiles.'</strong> / Total Size: <strong>'.MiscAdmin::formatBytes($totalSize).'</strong>';
 	    } else {
 		    echo 'The directory does not exists.';
 	    }
 
 	    exit();
     }
-}
+
+    }

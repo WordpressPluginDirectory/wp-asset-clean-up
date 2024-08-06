@@ -7,20 +7,20 @@ if (! isset($data)) {
 }
 
 use WpAssetCleanUp\Misc;
+use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
-include_once '_top-area.php';
+include_once __DIR__ . '/_top-area.php';
 
 do_action('wpacu_admin_notices');
 ?>
 <div class="wpacu-wrap wpacu-tools-area">
-    <nav class="wpacu-tab-nav-wrapper nav-tab-wrapper">
-        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=reset')); ?>" class="nav-tab <?php if ($data['for'] === 'reset') { ?>nav-tab-active<?php } ?>"><?php _e('Reset', 'wp-asset-clean-up'); ?></a>
-        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=system_info')); ?>" class="nav-tab <?php if ($data['for'] === 'system_info') { ?>nav-tab-active<?php } ?>"><?php _e('System Info', 'wp-asset-clean-up'); ?></a>
-        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=storage')); ?>" class="nav-tab <?php if ($data['for'] === 'storage') { ?>nav-tab-active<?php } ?>"><?php _e('Storage Info', 'wp-asset-clean-up'); ?></a>
-        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=debug')); ?>" class="nav-tab <?php if ($data['for'] === 'debug') { ?>nav-tab-active<?php } ?>"><?php _e('Debugging', 'wp-asset-clean-up'); ?></a>
-        <?php
-        ?>
-        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=import_export')); ?>" class="nav-tab <?php if ($data['for'] === 'import_export') { ?>nav-tab-active<?php } ?>"><?php _e('Import &amp; Export', 'wp-asset-clean-up'); ?></a>
+    <nav class="wpacu-tab-nav-wrapper wpacu-nav-tab-wrapper">
+        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=reset')); ?>" class="wpacu-nav-tab <?php if ($data['for'] === 'reset') { ?>wpacu-nav-tab-active<?php } ?>"><?php _e('Reset', 'wp-asset-clean-up'); ?></a>
+        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=system_info')); ?>" class="wpacu-nav-tab <?php if ($data['for'] === 'system_info') { ?>wpacu-nav-tab-active<?php } ?>"><?php _e('System Info', 'wp-asset-clean-up'); ?></a>
+        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=storage')); ?>" class="wpacu-nav-tab <?php if ($data['for'] === 'storage') { ?>wpacu-nav-tab-active<?php } ?>"><?php _e('Storage Info', 'wp-asset-clean-up'); ?></a>
+        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=debug')); ?>" class="wpacu-nav-tab <?php if ($data['for'] === 'debug') { ?>wpacu-nav-tab-active<?php } ?>"><?php _e('Debugging', 'wp-asset-clean-up'); ?></a>
+        <a href="<?php echo esc_url(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=import_export')); ?>" class="wpacu-nav-tab <?php if ($data['for'] === 'import_export') { ?>wpacu-nav-tab-active<?php } ?>"><?php _e('Import &amp; Export', 'wp-asset-clean-up'); ?></a>
     </nav>
 
 	<div class="wpacu-tools-container">
@@ -31,6 +31,15 @@ do_action('wpacu_admin_notices');
                 <select name="wpacu-reset" id="wpacu-reset-drop-down">
                     <option value=""><?php _e('Select an option first', 'wp-asset-clean-up'); ?>...</option>
                     <option data-id="wpacu-warning-reset-settings" value="reset_settings"><?php _e('Reset "Settings"', 'wp-asset-clean-up'); ?></option>
+
+                    <?php
+                    // [CRITICAL CSS]
+                    ?>
+                        <option data-id="wpacu-warning-reset-critical-css" value="reset_critical_css"><?php _e('Reset "Critical CSS"', 'wp-asset-clean-up'); ?></option>
+                    <?php
+                    // [/CRITICAL CSS]
+                    ?>
+
                     <option data-id="wpacu-warning-reset-everything-except-settings" value="reset_everything_except_settings"><?php _e('Reset everything except "Settings"', 'wp-asset-clean-up'); ?></option>
                     <option data-id="wpacu-warning-reset-everything" value="reset_everything"><?php _e('Reset everything: "Settings", All Unloads (bulk &amp; per page) &amp; Load Exceptions', 'wp-asset-clean-up'); ?></option>
                 </select>
@@ -43,7 +52,7 @@ do_action('wpacu_admin_notices');
 
                 <div id="wpacu-cache-assets-remove-area">
                     <label for="wpacu-remove-cache-assets">
-                        <input id="wpacu-remove-cache-assets" type="checkbox" name="wpacu-remove-cache-assets" value="1" /> <?php echo sprintf(__('Also remove any cached CSS/JS files from %s', 'wp-asset-clean-up'), '<code>/'.basename(WP_CONTENT_DIR) . \WpAssetCleanUp\OptimiseAssets\OptimizeCommon::getRelPathPluginCacheDir().'</code>'); ?> (please be careful as there might be cached pages - e.g. people previewing your page via Google Cache - still making reference to the CSS/JS files, you can leave it unchecked if you are not about it)
+                        <input id="wpacu-remove-cache-assets" type="checkbox" name="wpacu-remove-cache-assets" value="1" /> <?php echo sprintf(__('Also remove any cached CSS/JS files from %s', 'wp-asset-clean-up'), '<code>/'.basename(WP_CONTENT_DIR) . OptimizeCommon::getRelPathPluginCacheDir().'</code>'); ?> (please be careful as there might be cached pages - e.g. people previewing your page via Google Cache - still making reference to the CSS/JS files, you can leave it unchecked if you are not about it)
                     </label>
                 </div>
 
@@ -52,6 +61,16 @@ do_action('wpacu_admin_notices');
                 <div id="wpacu-warning-reset-settings" class="wpacu-warning">
                     <p><?php _e('This will reset every option from the "Settings" page/tab to the same state it was when you first activated the plugin.', 'wp-asset-clean-up'); ?></p>
                 </div>
+
+                <?php
+                // [CRITICAL CSS]
+                ?>
+                <div id="wpacu-warning-reset-critical-css" class="wpacu-warning">
+                    <p><?php _e('This will remove all the critical CSS information from <em>"CSS &amp; JS Manager" -&gt; "Manage Critical CSS"</em> and restore it the way it was by default. This is useful, for instance, when you redesign your website &amp; a new critical CSS needs to be added on all pages, rather then having any unneeded leftovers from the old CSS printing on certain pages.', 'wp-asset-clean-up-pro'); ?></p>
+                </div>
+                <?php
+                // [/CRITICAL CSS]
+                ?>
 
                 <div id="wpacu-warning-reset-everything-except-settings" class="wpacu-warning">
                     <p><?php _e('This will reset everything (changes per page &amp; any load exceptions), except the values from "Settings".', 'wp-asset-clean-up'); ?></p>
@@ -104,7 +123,7 @@ do_action('wpacu_admin_notices');
 
         <?php
         if ($data['for'] === 'storage') {
-	        $currentStorageDirRel        = \WpAssetCleanUp\OptimiseAssets\OptimizeCommon::getRelPathPluginCacheDir();
+	        $currentStorageDirRel        = OptimizeCommon::getRelPathPluginCacheDir();
 	        $currentStorageDirFull       = WP_CONTENT_DIR . $currentStorageDirRel;
 	        $currentStorageDirIsWritable = is_writable($currentStorageDirFull);
 
@@ -132,7 +151,7 @@ do_action('wpacu_admin_notices');
             <p><?php _e('Depending on the current settings, a storage caching directory of the optimized files is needed', 'wp-asset-clean-up'); ?>. Reason being that specific CSS/JS files had to be altered and they are retrieved faster from the caching directory, rather than altering then "on the fly" on every page load. <span style="color: #004567;" class="dashicons dashicons-info"></span> <a target="_blank" href="https://assetcleanup.com/docs/?p=526">Read more</a></p>
 
             <?php
-	        $storageStats = \WpAssetCleanUp\OptimiseAssets\OptimizeCommon::getStorageStats();
+	        $storageStats = OptimizeCommon::getStorageStats();
 
 	        if (isset($storageStats['total_size'], $storageStats['total_files'])) {
 		        ?>
@@ -161,7 +180,7 @@ do_action('wpacu_admin_notices');
 			        $rowStyle = 'background: rgba(0,0,0,.07); padding: 4px; display: inline;';
 		        }
 
-                echo '<li><div style="'.esc_html($rowStyle).'">'.esc_html($localDirPath).': <strong>'.\WpAssetCleanUp\Misc::formatBytes($totalDirSize).'</strong> '.$cssJsDirMarkerOutput.'</div></li>';
+                echo '<li><div style="'.esc_html($rowStyle).'">'.esc_html($localDirPath).': <strong>'.MiscAdmin::formatBytes($totalDirSize).'</strong> '.$cssJsDirMarkerOutput.'</div></li>';
 	        }
 
 	        echo '</ul>';
@@ -194,7 +213,7 @@ do_action('wpacu_admin_notices');
 
 	        if ($logPHPErrorsLocation !== 'none_set' && is_file($logPHPErrorsLocation)) {
 		        $logPHPErrorsLocationFileSize = filesize($logPHPErrorsLocation);
-		        $logPHPErrorsLocationFileSizeFormatted = \WpAssetCleanUp\Misc::formatBytes($logPHPErrorsLocationFileSize);
+		        $logPHPErrorsLocationFileSizeFormatted = MiscAdmin::formatBytes($logPHPErrorsLocationFileSize);
             }
             ?>
             <form method="post" action="">
@@ -255,6 +274,15 @@ do_action('wpacu_admin_notices');
                         <select required="required" id="wpacu-export-selection" name="wpacu_export_for">
                             <option value="">Select an option first...</option>
                             <option value="settings">Settings</option>
+
+	                        <?php
+	                        // [CRITICAL CSS]
+	                        ?>
+                                <option value="critical_css">Critical CSS</option>
+	                        <?php
+	                        // [/CRITICAL CSS]
+	                        ?>
+
                             <option value="everything">Everything</option>
                         </select>
                     </p>

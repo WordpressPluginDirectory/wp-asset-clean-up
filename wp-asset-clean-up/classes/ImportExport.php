@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
@@ -10,7 +12,31 @@ use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 class ImportExport
 {
 	/***** BEGIN EXPORT ******/
-	/**
+    /**
+     * @return array
+     */
+    public static function getCriticalCssOptionsArray()
+    {
+        global $wpdb;
+
+        $criticalCssOptionsArray = array();
+
+        $likeCssQuery                      = WPACU_PLUGIN_ID . '_critical_css_%';
+        $sqlFetchAnyCriticalCssOptionNames = <<<SQL
+SELECT option_name FROM `{$wpdb->prefix}options` WHERE option_name LIKE '{$likeCssQuery}'
+SQL;
+        $allCriticalCssOptionNames         = $wpdb->get_col($sqlFetchAnyCriticalCssOptionNames);
+
+        if ( ! empty($allCriticalCssOptionNames)) {
+            foreach ($allCriticalCssOptionNames as $criticalCssOptionName) {
+                $criticalCssOptionsArray[$criticalCssOptionName] = get_option($criticalCssOptionName);
+            }
+        }
+
+        return $criticalCssOptionsArray;
+    }
+
+    /**
 	 * @return string
 	 */
 	public function jsonSettings()
@@ -19,7 +45,7 @@ class ImportExport
 		$settingsArray = $wpacuSettings->getAll();
 
 		// Some "Site-wide Common Unloads" values are fetched outside the "Settings" option values
-		// e.g. jQuery Migrate, Comment Reply
+		// e.g., jQuery Migrate, Comment Reply
 		$globalUnloadList = Main::instance()->getGlobalUnload();
 
 		// CSS
@@ -69,6 +95,17 @@ class ImportExport
 			);
 		}
 
+		if ($wpacuExportFor === 'critical_css') {
+			$exportComment = str_replace('[exported_text]', 'Critical CSS', $exportComment);
+
+			$criticalCssOptionsArray = self::getCriticalCssOptionsArray();
+
+			$valuesArray = array(
+				'__comment' => $exportComment,
+				'critical_css_options' => $criticalCssOptionsArray
+			);
+		}
+
 		if ($wpacuExportFor === 'everything') {
 			$exportComment = str_replace('[exported_text]', 'Everything', $exportComment);
 
@@ -94,19 +131,7 @@ class ImportExport
 			$postTypeLoadExceptionsJson  = get_option(WPACU_PLUGIN_ID . '_post_type_load_exceptions');
 			$postTypeLoadExceptionsArray = json_decode($postTypeLoadExceptionsJson, ARRAY_A);
 
-			$globalDataListJson  = get_option(WPACU_PLUGIN_ID . '_global_data');
-			$globalDataListArray = json_decode($globalDataListJson, ARRAY_A);
-
-			// [wpacu_pro]
-			// Load exceptions for extras: is_archive(), author, search, 404 pages
-			$extrasLoadExceptionsListJson = get_option(WPACU_PLUGIN_ID . '_extras_load_exceptions');
-			$extrasLoadExceptionsArray    = json_decode($extrasLoadExceptionsListJson, ARRAY_A);
-
-			// Load exceptions for pages that have certain taxonomies set
-			$postTypeViaTaxLoadExceptionsJson  = get_option(WPACU_PLUGIN_ID . '_post_type_via_tax_load_exceptions');
-			$postTypeViaTaxLoadExceptionsArray = json_decode($postTypeViaTaxLoadExceptionsJson, ARRAY_A);
-			// [/wpacu_pro]
-
+			$globalDataListArray = wpacuGetGlobalData();
 			global $wpdb;
 
 			$allMetaResults = array();
@@ -126,35 +151,32 @@ SQL;
 
 			// Export Field Names should be kept as they are and in case
 			// they are changed later on, a fallback should be in place
-			$valuesArray = array(
-				'__comment' => $exportComment,
-				'settings'  => json_decode($settingsJson, ARRAY_A),
+            $valuesArray = array(
+                '__comment' => $exportComment,
+                'settings'  => json_decode($settingsJson, ARRAY_A),
 
-				'homepage' => array(
-					'unloads'         => $frontPageNoLoadArray,
-					'load_exceptions' => $frontPageExceptionsListArray
-				),
+                'homepage' => array(
+                    'unloads'         => $frontPageNoLoadArray,
+                    'load_exceptions' => $frontPageExceptionsListArray
+                ),
 
-				'global_unload' => $globalUnloadArray,
-				'bulk_unload'   => $bulkUnloadArray,
+                'global_unload' => $globalUnloadArray,
+                'bulk_unload'   => $bulkUnloadArray,
 
-				'post_type_exceptions'         => $postTypeLoadExceptionsArray,
+                'post_type_exceptions' => $postTypeLoadExceptionsArray,
 
-				// [wpacu_pro]
-				'post_type_via_tax_exceptions' => $postTypeViaTaxLoadExceptionsArray,
-			    // [/wpacu_pro]
+                'global_data' => $globalDataListArray,
 
-				'global_data'   => $globalDataListArray,
+                'posts_metas' => $allMetaResults['postmeta']
+            );
 
-				// [wpacu_pro]
-				'extras_exceptions' => $extrasLoadExceptionsArray,
-				// [/wpacu_pro]
-
-				'posts_metas'   => $allMetaResults['postmeta'],
-			);
-		} else {
-			return; // has to be "Settings" or "Everything"
+            $valuesArray['critical_css_options']         = self::getCriticalCssOptionsArray();
 		}
+
+        if (empty($valuesArray)) {
+            // It has to be filled, otherwise the wrong parameters might have been set
+            exit();
+        }
 
 		// Was the right selection made? Continue
 		$date = date('j-M-Y-H.i');
@@ -201,7 +223,7 @@ SQL;
 
 		$valuesArray = json_decode($valuesJson, ARRAY_A);
 
-		if ( ! (JSON_ERROR_NONE === Misc::jsonLastError())) {
+		if ( ! (JSON_ERROR_NONE === wpacuJsonLastError())) {
 			return;
 		}
 
@@ -210,9 +232,7 @@ SQL;
 		// NOTE: The values are not replaced, but added to the existing ones (if any)
 
 		// "Settings" (Replace)
-		if (isset($valuesArray['settings']) && ! empty($valuesArray['settings'])) {
-			$wpacuSettings = new Settings();
-
+		if ( ! empty($valuesArray['settings']) ) {
 			// "Site-wide Common Unloads" - apply settings
 
 			// JS
@@ -223,7 +243,8 @@ SQL;
 			$disableGutenbergCssBlockLibrary = isset( $valuesArray['settings']['disable_wp_block_library'] ) ? $valuesArray['settings']['disable_wp_block_library'] : false;
 			$disableDashiconsForGuests       = isset( $valuesArray['settings']['disable_dashicons_for_guests'] ) ? $valuesArray['settings']['disable_dashicons_for_guests'] : false;
 
-			$wpacuSettings->updateSiteWideRuleForCommonAssets(
+            $wpacuSettingsAdmin = new SettingsAdmin();
+            $wpacuSettingsAdmin->updateSiteWideRuleForCommonAssets(
 				array(
 					// JS
 					'jquery_migrate'   => $disableJQueryMigrate,
@@ -268,18 +289,10 @@ SQL;
 		}
 
 		// Post type: load exception
-		if (isset($valuesArray['post_type_exceptions']) && ! empty($valuesArray['post_type_exceptions'])) {
+		if ( ! empty($valuesArray['post_type_exceptions']) ) {
 			Misc::addUpdateOption(WPACU_PLUGIN_ID . '_post_type_load_exceptions', wp_json_encode($valuesArray['post_type_exceptions']));
 			$importedList[] = 'post_type_load_exceptions';
 		}
-
-		// [wpacu_pro]
-		// Post type: load exception via taxonomy
-		if (isset($valuesArray['post_type_via_tax_exceptions']) && ! empty($valuesArray['post_type_via_tax_exceptions'])) {
-			Misc::addUpdateOption(WPACU_PLUGIN_ID . '_post_type_via_tax_exceptions', wp_json_encode($valuesArray['post_type_via_tax_exceptions']));
-			$importedList[] = 'post_type_via_tax_exceptions';
-		}
-		// [/wpacu_pro]
 
 		// Global Data
 		if (isset($valuesArray['global_data']['scripts'])
@@ -291,7 +304,7 @@ SQL;
 		// [START] All Posts Metas (per page unloads, load exceptions, page options from side meta box)
 		$targetKey = 'posts_metas';
 
-		if (isset($valuesArray[$targetKey]) && ! empty($valuesArray[$targetKey])) {
+		if ( ! empty($valuesArray[$targetKey]) ) {
 			foreach ($valuesArray[$targetKey] as $metaValues) {
 				// It needs to have a post ID and meta key starting with _' . WPACU_PLUGIN_ID . '
 				if ( ! (isset($metaValues['post_id'], $metaValues['meta_key'])
@@ -312,11 +325,21 @@ SQL;
 		}
 		// [END] All Posts Metas (per page unloads, load exceptions, page options from side meta box)
 
+        if ( ! empty( $valuesArray['critical_css_options'] ) ) {
+            foreach ( $valuesArray['critical_css_options'] as $optionName => $optionValue ) {
+                if ( strpos( $optionName, WPACU_PLUGIN_ID . '_critical_css_' ) === 0 ) {
+                    Misc::addUpdateOption( $optionName, $optionValue );
+                }
+            }
+
+            $importedList[] = 'critical_css_options';
+        }
+
 		if (! empty($importedList)) {
 			// After import was completed, clear all CSS/JS cache
 			OptimizeCommon::clearCache();
 
-			set_transient('wpacu_import_done', $importedList, 30);
+			set_transient(WPACU_PLUGIN_ID . '_import_done', $importedList, 30);
 
 			wp_redirect(admin_url('admin.php?page=wpassetcleanup_tools&wpacu_for=import_export&wpacu_import_done=1&wpacu_time=' . time()));
 			exit();

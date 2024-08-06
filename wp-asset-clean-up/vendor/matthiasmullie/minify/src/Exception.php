@@ -8,7 +8,7 @@
  * @author Matthias Mullie <minify@mullie.eu>
  */
 
-namespace MatthiasMullie\Minify;
+namespace MatthiasMullieWpacu\Minify;
 
 /**
  * Base Exception Class.

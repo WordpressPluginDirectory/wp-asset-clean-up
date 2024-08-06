@@ -6,22 +6,18 @@ if (! isset($data)) {
 	exit;
 }
 
-if (! defined('WPACU_USE_MODAL_BOX')) {
-	define('WPACU_USE_MODAL_BOX', true);
-}
-
 use WpAssetCleanUp\Preloads;
 
 $assetsPreloaded = Preloads::instance()->getPreloads();
 
-$hasCssPreloads = isset($assetsPreloaded['styles'])  && ! empty($assetsPreloaded['styles']);
-$hasJsPreloads  = isset($assetsPreloaded['scripts']) && ! empty($assetsPreloaded['scripts']);
+$hasCssPreloads = ! empty($assetsPreloaded['styles']);
+$hasJsPreloads  = ! empty($assetsPreloaded['scripts']);
 
 $isUpdateable = $hasCssPreloads || $hasJsPreloads;
 
 do_action('wpacu_admin_notices');
 ?>
-<p>This is the list of all the CSS/JS that were preloaded. &nbsp;&nbsp;<a id="wpacu-preloaded-assets-info-target" href="#wpacu-preloaded-assets-info" style="text-decoration: none;"><span class="dashicons dashicons-info"></span> How the list below gets filled?</a></p>
+<p>This is the list of all the CSS/JS that were preloaded. &nbsp;&nbsp;<a data-wpacu-modal-target="wpacu-preloaded-assets-info-target" href="#wpacu-preloaded-assets-info" style="text-decoration: none;"><span class="dashicons dashicons-info"></span> How the list below gets filled?</a></p>
 
 <form action="" method="post">
     <h2>Styles (.css)</h2>

@@ -21,7 +21,7 @@ $disableRssFeedAreaStyle = ($data['disable_rss_feed'] == 1) ? 'opacity: 1;' : 'o
                 <label for="wpacu_disable_rss_feed">Disable RSS Feed?</label>
             </th>
             <td>
-                <label class="wpacu_switch">
+                <label class="wpacu_switch wpacu_del_type">
                     <input id="wpacu_disable_rss_feed"
                            data-target-opacity="wpacu_disable_rss_feed_message_area"
                            type="checkbox"
@@ -44,7 +44,7 @@ $disableRssFeedAreaStyle = ($data['disable_rss_feed'] == 1) ? 'opacity: 1;' : 'o
                 <label for="wpacu_remove_main_feed_link">Remove Main RSS Feed Link?</label>
             </th>
             <td>
-                <label class="wpacu_switch">
+                <label class="wpacu_switch wpacu_del_type">
                     <input id="wpacu_remove_main_feed_link"
                            type="checkbox"
 					    <?php echo (($data['remove_main_feed_link'] == 1) ? 'checked="checked"' : ''); ?>
@@ -61,7 +61,7 @@ $disableRssFeedAreaStyle = ($data['disable_rss_feed'] == 1) ? 'opacity: 1;' : 'o
                 <label for="wpacu_remove_comment_feed_link">Remove Comment RSS Feed Link?</label>
             </th>
             <td>
-                <label class="wpacu_switch">
+                <label class="wpacu_switch wpacu_del_type">
                     <input id="wpacu_remove_comment_feed_link"
                            type="checkbox"
 					    <?php echo (($data['remove_comment_feed_link'] == 1) ? 'checked="checked"' : ''); ?>

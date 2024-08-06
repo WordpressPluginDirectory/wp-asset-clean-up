@@ -1,6 +1,6 @@
 <?php
 
-namespace MatthiasMullie\PathConverter;
+namespace MatthiasMullieWpacu\PathConverter;
 
 /**
  * Convert file paths.

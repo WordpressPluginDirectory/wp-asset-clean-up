@@ -2,6 +2,10 @@
 /*
  * No direct access to this file
  */
+
+use WpAssetCleanUp\MainAdmin;
+use WpAssetCleanUp\MetaBoxes;
+
 if (! isset($data)) {
     exit;
 }
@@ -85,9 +89,9 @@ if ($data['is_list_fetchable']) {
 	    $data['bulk_unloaded_type'] = 'post_type';
 	    $data['is_bulk_unloadable'] = true;
 
-	    $data = $this->setPageTemplate($data);
+	    $data = MainAdmin::instance()->setPageTemplate($data);
 
-        $data['page_options'] = \WpAssetCleanUp\MetaBoxes::getPageOptions($data['post_id']);
+        $data['page_options'] = MetaBoxes::getPageOptions($data['post_id']);
         $data['page_options_with_assets_manager_no_load'] = true;
 
         include __DIR__.'/meta-box-restricted-page-load.php';

@@ -1,13 +1,16 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp\OptimiseAssets;
 
 use WpAssetCleanUp\FileSystem;
 use WpAssetCleanUp\CleanUp;
 use WpAssetCleanUp\Main;
+use WpAssetCleanUp\MainFront;
+use WpAssetCleanUp\Menu;
 use WpAssetCleanUp\MetaBoxes;
 use WpAssetCleanUp\Misc;
 use WpAssetCleanUp\ObjectCache;
-use WpAssetCleanUp\Plugin;
 use WpAssetCleanUp\Preloads;
 
 /**
@@ -23,6 +26,11 @@ class OptimizeJs
 	{
 		add_action( 'wp_print_footer_scripts', static function() {
 			/* [wpacu_timing] */ Misc::scriptExecTimer( 'prepare_optimize_files_js' ); /* [/wpacu_timing] */
+            // Are both Minify and Cache Dynamic JS disabled? No point in continuing and using extra resources as there is nothing to change
+            if ( ! OptimizeCommon::isWorthCheckingForJsOptimization() || OptimizeCommon::preventAnyFrontendOptimization() ) {
+                return;
+            }
+
 			self::prepareOptimizeList();
 			/* [wpacu_timing] */ Misc::scriptExecTimer( 'prepare_optimize_files_js', 'end' ); /* [/wpacu_timing] */
 		}, PHP_INT_MAX );
@@ -33,38 +41,36 @@ class OptimizeJs
 	 */
 	public static function prepareOptimizeList()
 	{
-		// Are both Minify and Cache Dynamic JS disabled? No point in continuing and using extra resources as there is nothing to change
-		if ( ! self::isWorthCheckingForOptimization() || Plugin::preventAnyFrontendOptimization() ) {
-			return;
-		}
-
 		global $wp_scripts;
 
 		$jsOptimizeList = array();
 
-		$wpScriptsDone  = isset($wp_scripts->done)  && is_array($wp_scripts->done)  ? $wp_scripts->done  : array();
-		$wpScriptsQueue = isset($wp_scripts->queue) && is_array($wp_scripts->queue) ? $wp_scripts->queue : array();
+		$wpScriptsDone  = isset( $wp_scripts->done ) && is_array( $wp_scripts->done ) ? $wp_scripts->done : array();
+		$wpScriptsQueue = isset( $wp_scripts->queue ) && is_array( $wp_scripts->queue ) ? $wp_scripts->queue : array();
 
-		$wpScriptsList = array_unique(array_merge($wpScriptsDone, $wpScriptsQueue));
+		$wpScriptsList = array_unique( array_merge( $wpScriptsDone, $wpScriptsQueue ) );
 
 		// Collect all enqueued clean (no query strings) HREFs to later compare them against any hardcoded JS
 		$allEnqueuedCleanScriptSrcs = array();
 
 		// [Start] Collect for caching
-		if ( ! empty($wpScriptsList) ) {
-			$isMinifyJsFilesEnabled = MinifyJs::isMinifyJsEnabled() && in_array(Main::instance()->settings['minify_loaded_js_for'], array('src', 'all', ''));
+		if ( ! empty( $wpScriptsList ) ) {
+			$isMinifyJsFilesEnabled = in_array( Main::instance()->settings['minify_loaded_js_for'], array( 'src', 'all', '' ) )
+			                          && MinifyJs::isMinifyJsEnabled();
 
 			foreach ( $wpScriptsList as $index => $scriptHandle ) {
 				if ( isset( Main::instance()->wpAllScripts['registered'][ $scriptHandle ]->src ) && ( $src = Main::instance()->wpAllScripts['registered'][ $scriptHandle ]->src ) ) {
 					$localAssetPath = OptimizeCommon::getLocalAssetPath( $src, 'js' );
 
-					if ( ! $localAssetPath || ! is_file( $localAssetPath ) ) {
+					if ( ! $localAssetPath ) {
 						continue; // not a local file
 					}
 
-					ob_start();
-					$wp_scripts->do_item( $scriptHandle );
-					$scriptSourceTag = trim( ob_get_clean() );
+					if ( ! $scriptSourceTag = ObjectCache::wpacu_cache_get( 'wpacu_script_loader_tag_' . $scriptHandle ) ) {
+						ob_start();
+						$wp_scripts->do_item( $scriptHandle );
+						$scriptSourceTag = trim( ob_get_clean() );
+					}
 
 					// Check if the JS has any 'data-wpacu-skip' attribute; if it does, do not alter it
 					if ( preg_match( '#data-wpacu-skip([=>/ ])#i', $scriptSourceTag ) ) {
@@ -80,7 +86,10 @@ class OptimizeJs
 
 					$optimizeValues = self::maybeOptimizeIt(
 						Main::instance()->wpAllScripts['registered'][ $scriptHandle ],
-						array( 'local_asset_path' => $localAssetPath, 'is_minify_js_enabled' => $isMinifyJsFilesEnabled )
+						array(
+							'local_asset_path'     => $localAssetPath,
+							'is_minify_js_enabled' => $isMinifyJsFilesEnabled
+						)
 					);
 
 					ObjectCache::wpacu_cache_set( 'wpacu_maybe_optimize_it_js_' . $scriptHandle, $optimizeValues );
@@ -90,10 +99,10 @@ class OptimizeJs
 					}
 				}
 			}
-		}
 
-		ObjectCache::wpacu_cache_add('wpacu_js_enqueued_srcs', $allEnqueuedCleanScriptSrcs);
-		ObjectCache::wpacu_cache_add('wpacu_js_optimize_list', $jsOptimizeList);
+			ObjectCache::wpacu_cache_add( 'wpacu_js_enqueued_srcs', $allEnqueuedCleanScriptSrcs );
+			ObjectCache::wpacu_cache_add( 'wpacu_js_optimize_list', $jsOptimizeList );
+		}
 		// [End] Collect for caching
 	}
 
@@ -111,17 +120,13 @@ class OptimizeJs
 
 		global $wp_version;
 
-		$src = isset($value->src) ? $value->src : false;
-
-		if (! $src) {
-			return array();
-		}
+		$src = $value->src; // it's always set at this point
 
 		$doFileMinify = true;
 
 		$isMinifyJsFilesEnabled = (isset($fileAlreadyChecked['is_minify_js_enabled']) && $fileAlreadyChecked['is_minify_js_enabled'])
 			? $fileAlreadyChecked['is_minify_js_enabled']
-			: MinifyJs::isMinifyJsEnabled() && in_array(Main::instance()->settings['minify_loaded_js_for'], array('src', 'all', ''));
+			: in_array(Main::instance()->settings['minify_loaded_js_for'], array('src', 'all', '')) && MinifyJs::isMinifyJsEnabled();
 
 		if ( ! $isMinifyJsFilesEnabled || MinifyJs::skipMinify($src, $value->handle) ) {
 			$doFileMinify = false;
@@ -135,11 +140,11 @@ class OptimizeJs
 		// Already checked? Do not reuse OptimizeCommon::getLocalAssetPath() and is_file()
 		if (isset($fileAlreadyChecked['local_asset_path']) && $fileAlreadyChecked['local_asset_path']) {
 			$localAssetPath = $fileAlreadyChecked['local_asset_path'];
-			$checkCond = $localAssetPath;
 		} else {
 			$localAssetPath = OptimizeCommon::getLocalAssetPath( $src, 'js' );
-			$checkCond = $localAssetPath && is_file($localAssetPath);
 		}
+
+		$checkCond = $localAssetPath;
 
 		if ($checkCond) {
 			if ($fileMTime = @filemtime($localAssetPath)) {
@@ -149,9 +154,9 @@ class OptimizeJs
 		}
 
 		if ($isJsFile) {
-			// This is the safest one as handle names for specific static can change on very page load
+			// This is the safest one as handle names for specific static can change on every page load
 			// as some developers have a habit of adding the UNIX time or other random string to a handle (e.g. for debugging)
-			$uniqueAssetStr = md5 ( str_replace(Misc::getWpRootDirPath(), '', $localAssetPath) );
+			$uniqueAssetStr = md5 ( str_replace(Misc::getWpRootDirPathBasedOnPath($localAssetPath), '', $localAssetPath) );
 		} else {
 			$uniqueAssetStr = md5( $value->handle );
 		}
@@ -160,53 +165,52 @@ class OptimizeJs
 
 		$skipCache = false;
 
-		if (isset($_GET['wpacu_no_cache']) || (defined('WPACU_NO_CACHE') && WPACU_NO_CACHE === true)) {
+		if (isset($_GET['wpacu_no_cache']) || wpacuIsDefinedConstant('WPACU_NO_CACHE')) {
 			$skipCache = true;
 		}
 
 		if (! $skipCache) {
-			$savedValues = OptimizeCommon::getTransient($transientName);
+			$savedValuesArray = OptimizeCommon::getTransient($transientName);
 
-			if ( $savedValues ) {
-				$savedValuesArray = json_decode($savedValues, ARRAY_A);
+			if (isset($savedValuesArray[0]) && $savedValuesArray[0] === 'no_alter') {
+				return array();
+			}
 
-				if ( $savedValuesArray['ver'] !== $dbVer ) {
-					// New File Version? Delete transient as it will be re-added to the database with the new version
-					OptimizeCommon::deleteTransient($transientName);
-				} else {
-					$localPathToJsOptimized = str_replace( '//', '/', Misc::getWpRootDirPath() . $savedValuesArray['optimize_uri'] );
+			if ( ! empty($savedValuesArray) ) {
+				if ( $savedValuesArray['ver'] === $dbVer ) {
+					$localPathToJsOptimized = str_replace( '//', '/', Misc::getWpRootDirPathBasedOnPath($savedValuesArray['optimize_uri']) . $savedValuesArray['optimize_uri'] );
 
 					// Do not load any minified JS file (from the database transient cache) if it doesn't exist
 					// It will fallback to the original JS file
 					if ( isset( $savedValuesArray['source_uri'] ) && is_file( $localPathToJsOptimized ) ) {
-						if (Main::instance()->settings['fetch_cached_files_details_from'] === 'db_disk') {
+						if ( Main::instance()->settings['fetch_cached_files_details_from'] === 'db_disk' ) {
 							$GLOBALS['wpacu_from_location_inc']++;
 						}
 
 						return array(
 							$savedValuesArray['source_uri'],
 							$savedValuesArray['optimize_uri'],
-							$value->src,
+							$src,
 							$value->handle
 						);
 					}
 				}
+
+				// If nothing valid gets returned above, make sure the transient gets deleted as it's re-added later on
+				OptimizeCommon::deleteTransient($transientName);
 			}
 		}
 
 		// Check if it starts without "/" or a protocol; e.g. "wp-content/theme/script.js"
-		if (strpos($src, '/') !== 0 &&
-		    strpos($src, '//') !== 0 &&
-		    stripos($src, 'http://') !== 0 &&
-		    stripos($src, 'https://') !== 0
+		if (strncmp($src, '/', 1) !== 0 &&
+            strncmp($src, '//', 2) !== 0 &&
+            strncasecmp($src, 'http://', 7) !== 0 &&
+            strncasecmp($src, 'https://', 8) !== 0
 		) {
 			$src = '/'.$src; // append the forward slash to be processed as relative later on
 		}
 
-		// Starts with '/', but not with '//'
-		if (strpos($src, '/') === 0 && strpos($src, '//') !== 0) {
-			$src = site_url() . $src;
-		}
+        $src = Misc::getHrefFromSource($src);
 
 		/*
 		 * [START] JS Content Optimization
@@ -230,7 +234,7 @@ class OptimizeJs
 			 * This is a local .JS file
 			 */
 			$pathToAssetDir = OptimizeCommon::getPathToAssetDir($value->src);
-			$sourceBeforeOptimization = str_replace(Misc::getWpRootDirPath(), '/', $localAssetPath);
+			$sourceBeforeOptimization = str_replace(Misc::getWpRootDirPathBasedOnPath($localAssetPath), '/', $localAssetPath);
 
 			$jsContent = FileSystem::fileGetContents($localAssetPath);
 		}
@@ -249,7 +253,7 @@ class OptimizeJs
 
 			$jsContent = $jsContentAfterMin;
 
-			if ( $jsContentBeforeMin && $jsContentAfterMin === '' ) {
+			if ( $jsContentAfterMin === '' ) {
 				// It had content, but became empty after minification, most likely it had only comments (e.g. a default child theme's style)
 				$jsContentBecomesEmptyAfterMin = true;
 			} else {
@@ -265,7 +269,7 @@ class OptimizeJs
 		if ( $jsContentBecomesEmptyAfterMin || $jsContent === '' ) {
 			$jsContent = '/**/';
 		} else {
-			$jsContentArray = self::maybeAlterContentForJsFile( $jsContent, false );
+			$jsContentArray = self::maybeAlterContentForJsFile( $jsContent );
 			$jsContent = $jsContentArray['content']; // resulting content after alteration
 			$jsContentAfterAlterToCompare = $jsContentArray['content_after_alter_to_compare'];
 
@@ -276,7 +280,7 @@ class OptimizeJs
 				if ( $jsContentCompare === $jsContentCompareWith ) {
 					// 1: The file was not minified
 					// 2: It doesn't need any alteration (e.g. no Google Fonts to strip from its content)
-					// No need to copy it in to the cache (save disk space)
+					OptimizeCommon::setTransient($transientName, 'no_alter');
 					return array();
 				}
 			}
@@ -289,6 +293,7 @@ class OptimizeJs
 		*/
 
 		if (isset($jsContentBeforeMin) && $jsContent === '/**/' && strpos($jsContentBeforeMin, '/*@cc_on') !== false && strpos($jsContentBeforeMin, '@*/') !== false) {
+			OptimizeCommon::setTransient($transientName, 'no_alter');
 			return array(); // Internet Explorer things, leave the file as it is
 		}
 
@@ -324,14 +329,12 @@ class OptimizeJs
 			return array();
 		}
 
-		$saveValues = array(
-			'source_uri'   => OptimizeCommon::getSourceRelPath($value->src),
-			'optimize_uri' => OptimizeCommon::getSourceRelPath($newLocalPathUrl),
-			'ver'          => $dbVer
-		);
+		$saveOutput = OptimizeCommon::getSourceRelPath($src) . "\n" .
+		              OptimizeCommon::getSourceRelPath($newLocalPathUrl) . "\n" .
+		              $dbVer;
 
 		// Add / Re-add (with new version) transient
-		OptimizeCommon::setTransient($transientName, wp_json_encode($saveValues));
+		OptimizeCommon::setTransient($transientName, $saveOutput);
 
 		return array(
 			OptimizeCommon::getSourceRelPath($value->src), // Original SRC (Relative path)
@@ -403,7 +406,9 @@ class OptimizeJs
 		}
 
 		// For debugging purposes
-		if (isset($_GET['wpacu_no_cache']) || (defined('WPACU_NO_CACHE') && WPACU_NO_CACHE === true)) { $useCacheForInlineScript = false; }
+		if (isset($_GET['wpacu_no_cache']) || wpacuIsDefinedConstant('WPACU_NO_CACHE')) {
+            $useCacheForInlineScript = false;
+        }
 
 		if ($useCacheForInlineScript) {
 			// Anything in the cache? Take it from there and don't spend resources with the minification
@@ -416,7 +421,7 @@ class OptimizeJs
 			if ( is_file( $pathToInlineJsOptimizedItem ) ) {
 				$cachedJsFileExpiresIn = OptimizeCommon::$cachedAssetFileExpiresIn;
 
-				if ( filemtime( $pathToInlineJsOptimizedItem ) < ( time() - 1 * $cachedJsFileExpiresIn ) ) {
+				if ( filemtime( $pathToInlineJsOptimizedItem ) < ( time() - $cachedJsFileExpiresIn ) ) {
 					// Has the caching period expired? Remove the file as a new one has to be generated
 					@unlink( $pathToInlineJsOptimizedItem );
 				} else {
@@ -455,7 +460,8 @@ class OptimizeJs
 	 * @param $htmlSource
 	 *
 	 * @return string
-	 */
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public static function updateHtmlSourceOriginalToOptimizedJs($htmlSource)
 	{
 		$parseSiteUrlPath = (string)parse_url(site_url(), PHP_URL_PATH);
@@ -470,7 +476,8 @@ class OptimizeJs
 		foreach ($allEnqueuedCleanSources as $allEnqueuedCleanSource) {
 			$allEnqueuedCleanSourcesIncludingTheirRelPaths[] = $allEnqueuedCleanSource;
 
-			if (strpos($allEnqueuedCleanSource, 'http://') === 0 || strpos($allEnqueuedCleanSource, 'https://') === 0) {
+			if (strncmp($allEnqueuedCleanSource, 'http://', 7) === 0 || strncmp($allEnqueuedCleanSource, 'https://',
+                    8) === 0) {
 				$allEnqueuedCleanSourcesIncludingTheirRelPaths[] = str_replace(array('http://', 'https://'), '//', $allEnqueuedCleanSource);
 
 				// e.g. www.mysite.com/blog/
@@ -490,12 +497,16 @@ class OptimizeJs
 
 		preg_match_all('#(<script[^>]*src(|\s+)=(|\s+)[^>]*>)|(<link[^>]*(as(\s+|)=(\s+|)(|"|\')script(|"|\'))[^>]*>)#Umi', $htmlSource, $matchesSourcesFromTags, PREG_SET_ORDER);
 
+		if (empty($matchesSourcesFromTags)) {
+			return $htmlSource;
+		}
+
 		$jsOptimizeListHardcoded = $scriptTagsToUpdate = array();
 
 		foreach ($matchesSourcesFromTags as $matches) {
 			$scriptSourceTag = $matches[0];
 
-			if (strip_tags($scriptSourceTag) !== '') {
+			if ($scriptSourceTag === '' || strip_tags($scriptSourceTag) !== '') {
 				// Hmm? Not a valid tag... Skip it...
 				continue;
 			}
@@ -571,7 +582,7 @@ class OptimizeJs
 
 				// If the minified files are deleted (e.g. /wp-content/cache/ is cleared)
 				// do not replace the JS file path to avoid breaking the website
-				$localPathOptimizedFile = rtrim(Misc::getWpRootDirPath(), '/') . $listValues[1];
+				$localPathOptimizedFile = rtrim(Misc::getWpRootDirPathBasedOnPath($listValues[1]), '/') . $listValues[1];
 
 				if (! is_file($localPathOptimizedFile)) {
 					continue;
@@ -603,18 +614,22 @@ class OptimizeJs
 
 				// Any rel tag? You never know
 				// e.g. <script src="/wp-content/themes/my-theme/script.js"></script>
-				if ( (strpos($listValues[2], '/') === 0 && strpos($listValues[2], '//') !== 0)
-				     || (strpos($listValues[2], '/') !== 0 &&
-				         strpos($listValues[2], '//') !== 0 &&
-				         stripos($listValues[2], 'http://') !== 0 &&
-				         stripos($listValues[2], 'https://') !== 0) ) {
+				if ( (strncmp($listValues[2], '/', 1) === 0 && strncmp($listValues[2], '//', 2) !== 0)
+				     || (strncmp($listValues[2], '/', 1) !== 0 &&
+                         strncmp($listValues[2], '//', 2) !== 0 &&
+                         strncasecmp($listValues[2], 'http://', 7) !== 0 &&
+                         strncasecmp($listValues[2], 'https://', 8) !== 0) ) {
 					$sourceUrlList[] = $listValues[2];
+				}
+
+				if ( $cleanScriptSrcFromTag === $listValues[0] ) {
+					$sourceUrlList[] = $cleanScriptSrcFromTag;
 				}
 
 				// If no CDN is set, it will return site_url() as a prefix
 				$optimizeUrl = OptimizeCommon::cdnToUrlFormat($cdnUrlForJs, 'raw') . $listValues[1]; // string
 
-				if ($scriptSourceTag !== str_ireplace($sourceUrlList, $optimizeUrl, $scriptSourceTag)) {
+				if ($scriptSourceTag !== str_replace($sourceUrlList, $optimizeUrl, $scriptSourceTag)) {
 					// Extra measure: Check the file size which should be 4 bytes, but add some margin error in case some environments will report less
 					$isEmptyOptimizedFile = (strpos($localPathOptimizedFile, '-wpacu-empty-file.js') !== false && filesize($localPathOptimizedFile) < 10);
 
@@ -663,6 +678,10 @@ class OptimizeJs
 			$newScriptSourceTag = str_replace( $sourceUrlList, $optimizeUrl, $scriptSourceTag );
 		}
 
+        if ( ! isset($newScriptSourceTag) ) {
+            return $scriptSourceTag; // something's wrong with the params that were passed; return tghe original tag
+        }
+
 		$tagToCheck = ($forAttr === 'src') ? 'script' : 'link';
 
 		$sourceUrlRel = is_array($sourceUrlList) ? OptimizeCommon::getSourceRelPath($sourceUrlList[0]) : OptimizeCommon::getSourceRelPath($sourceUrlList);
@@ -702,15 +721,13 @@ class OptimizeJs
 	public static function alterHtmlSource($htmlSource)
 	{
 		// There has to be at least one "<script", otherwise, it could be a feed request or something similar (not page, post, homepage etc.)
-		if ( stripos($htmlSource, '<script') === false || isset($_GET['wpacu_no_optimize_js']) ) {
+		if (isset($_GET['wpacu_no_optimize_js']) || stripos($htmlSource, '<script') === false ) {
 			return $htmlSource;
 		}
 
 		/* [wpacu_timing] */ Misc::scriptExecTimer( 'alter_html_source_for_optimize_js' ); /* [/wpacu_timing] */
 
-		/* [wpacu_pro] */$htmlSource = apply_filters('wpacu_pro_maybe_move_jquery_after_body_tag', $htmlSource);/* [/wpacu_pro] */
-
-		if (! Main::instance()->preventAssetsSettings()) {
+		if ( ! Main::instance()->preventAssetsSettings() ) {
 			/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_unload_ignore_deps_js'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
 			// Are there any assets unloaded where their "children" are ignored?
 			// Since they weren't dequeued the WP way (to avoid unloading the "children"), they will be stripped here
@@ -725,80 +742,88 @@ class OptimizeJs
 			}
 		}
 
-		$htmlSource = self::stripAnyReferencesForUnloadedScripts($htmlSource);
-
 		/*
 		 * The JavaScript files only get cached if they are minified or are loaded like /?custom-js=version - /script.php?ver=1 etc.
 		 * #optimizing
 		 * STEP 2: Load optimize-able caching list and replace the original source URLs with the new cached ones
 		 */
 
-		// At least minify or cache dynamic loaded JS has to be enabled to proceed
-		if (self::isWorthCheckingForOptimization()) {
-			/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_original_to_optimized_js'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
+		/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_original_to_optimized_js'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
+		// At least minify or cache dynamically loaded JS has to be enabled to proceed
+		if (OptimizeCommon::isWorthCheckingForJsOptimization()) {
 			// 'wpacu_js_optimize_list' caching list is also checked; if it's empty, no optimization is made
 			$htmlSource = self::updateHtmlSourceOriginalToOptimizedJs($htmlSource);
-			/* [wpacu_timing] */ Misc::scriptExecTimer($wpacuTimingName, 'end'); /* [/wpacu_timing] */
 		}
+		/* [wpacu_timing] */ Misc::scriptExecTimer($wpacuTimingName, 'end'); /* [/wpacu_timing] */
 
-		if (! Main::instance()->preventAssetsSettings()) {
-			/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_for_preload_js'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
+		/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_for_preload_js'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
+		if ( ! wpacuIsDefinedConstant('WPACU_NO_ASSETS_PRELOADED') && ! Main::instance()->preventAssetsSettings() ) {
 			$preloads = Preloads::instance()->getPreloads();
 
-			if (isset($preloads['scripts']) && ! empty($preloads['scripts'])) {
-				$htmlSource = Preloads::appendPreloadsForScriptsToHead($htmlSource);
-			}
-
-			/* [wpacu_timing] */ Misc::scriptExecTimer($wpacuTimingName, 'end'); /* [/wpacu_timing] */
-		}
-
-		/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_for_combine_js'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
-		$proceedWithCombineOnThisPage = true;
-
-		$isSingularPage = defined('WPACU_CURRENT_PAGE_ID') && WPACU_CURRENT_PAGE_ID > 0 && is_singular();
-
-		// If "Do not combine JS on this page" is checked in "Asset CleanUp Options" side meta box
-		// Works for posts, pages and custom post types
-		if ($isSingularPage || Misc::isHomePage()) {
-			if ($isSingularPage) {
-				$pageOptions = MetaBoxes::getPageOptions( WPACU_CURRENT_PAGE_ID ); // Singular page
-			} else {
-				$pageOptions = MetaBoxes::getPageOptions(0, 'front_page'); // Home page
-			}
-
-			// 'no_js_optimize' refers to avoid the combination of JS files
-			if ( (isset( $pageOptions['no_js_optimize'] )     && $pageOptions['no_js_optimize'])
-			     || (isset( $pageOptions['no_assets_settings'] ) && $pageOptions['no_assets_settings']) ) {
-				$proceedWithCombineOnThisPage = false;
-			}
-		}
-
-		if ($proceedWithCombineOnThisPage) {
-			/* [wpacu_timing] */ // Note: Load timing is checked within the method /* [/wpacu_timing] */
-			$htmlSource = CombineJs::doCombine($htmlSource);
-			if (defined('WPACU_REAPPLY_PRELOADING_FOR_COMBINED_JS') && WPACU_REAPPLY_PRELOADING_FOR_COMBINED_JS) {
+			if ( ! empty($preloads['scripts']) ) {
 				$htmlSource = Preloads::appendPreloadsForScriptsToHead($htmlSource);
 			}
 		}
 		/* [wpacu_timing] */ Misc::scriptExecTimer($wpacuTimingName, 'end'); /* [/wpacu_timing] */
 
-		if (self::isWorthCheckingForOptimization() && ! Main::instance()->preventAssetsSettings() && (MinifyJs::isMinifyJsEnabled() && in_array(Main::instance()->settings['minify_loaded_js_for'], array('inline', 'all')))) {
-			/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_for_minify_inline_script_tags'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
-			$htmlSource = MinifyJs::minifyInlineScriptTags($htmlSource);
-			/* [wpacu_timing] */ Misc::scriptExecTimer($wpacuTimingName, 'end'); /* [/wpacu_timing] */
+		/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_for_combine_js'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
+        if (self::proceedWithJsCombine()) {
+            $proceedWithCombineOnThisPage = true;
+
+            $isSingularPage = (int)wpacuGetConstant('WPACU_CURRENT_PAGE_ID') && MainFront::isSingularPage();
+
+            // If "Do not combine JS on this page" is checked in "Asset CleanUp Options" side meta box
+            // Works for posts, pages and custom post types
+            if ($isSingularPage || MainFront::isHomePage()) {
+                if ($isSingularPage) {
+                    $pageOptions = MetaBoxes::getPageOptions(WPACU_CURRENT_PAGE_ID); // Singular page
+                } else {
+                    $pageOptions = MetaBoxes::getPageOptions(0, 'front_page'); // Home page
+                }
+
+                // 'no_js_optimize' refers to avoid the combination of JS files
+                if ((isset($pageOptions['no_js_optimize']) && $pageOptions['no_js_optimize'])
+                    || (isset($pageOptions['no_assets_settings']) && $pageOptions['no_assets_settings'])) {
+                    $proceedWithCombineOnThisPage = false;
+                }
+            }
+
+            if ($proceedWithCombineOnThisPage) {
+                /* [wpacu_timing] */ // Note: Load timing is checked within the method /* [/wpacu_timing] */
+                $htmlSource = CombineJs::doCombine($htmlSource);
+                if (wpacuIsDefinedConstant('WPACU_REAPPLY_PRELOADING_FOR_COMBINED_JS')) {
+                    $htmlSource = Preloads::appendPreloadsForScriptsToHead($htmlSource);
+                }
+            }
+        }
+		/* [wpacu_timing] */ Misc::scriptExecTimer($wpacuTimingName, 'end'); /* [/wpacu_timing] */
+
+		/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_for_minify_inline_script_tags'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
+        if ( OptimizeCommon::isWorthCheckingForJsOptimization() &&
+		     ! Main::instance()->preventAssetsSettings() ) {
+			$htmlSource = MinifyJs::minifyOrAlterInlineScriptTags($htmlSource);
 		}
+		/* [wpacu_timing] */ Misc::scriptExecTimer($wpacuTimingName, 'end'); /* [/wpacu_timing] */
 
 		// Final cleanups
-		$htmlSource = str_replace(Preloads::DEL_SCRIPTS_PRELOADS, '', $htmlSource);
+		/* [wpacu_timing] */ $wpacuTimingName = 'alter_html_source_for_optimize_js_final_cleanups'; Misc::scriptExecTimer($wpacuTimingName); /* [/wpacu_timing] */
+		if ( ! wpacuIsDefinedConstant('WPACU_NO_ASSETS_PRELOADED') ) {
+            $htmlSource = str_replace(Preloads::DEL_SCRIPTS_PRELOADS, '', $htmlSource);
+        }
 
-		$htmlSource = preg_replace('#(\s+|)(data-wpacu-jquery-core-handle=1|data-wpacu-jquery-migrate-handle=1)(\s+|)#Umi', ' ', $htmlSource);
+        if (strpos($htmlSource, 'data-wpacu-script-rel-src-before') !== false) {
+            $htmlSource = preg_replace('# data-wpacu-script-rel-src-before="' . '(.*)' . '" #Usm', ' ', $htmlSource);
+        }
 
-		$htmlSource = preg_replace('#(\s+|)data-wpacu-script-rel-src-before=(["\'])' . '(.*)' . '(\1)(\s+|)#Usmi', ' ', $htmlSource);
-		$htmlSource = preg_replace('#<script(.*)data-wpacu-script-handle=\'(.*)\'#Umi', '<script \\1', $htmlSource);
-		$htmlSource = preg_replace('#<script(\s+)src=\'#Umi', '<script src=\'', $htmlSource);
+        $htmlSource = preg_replace(
+            '#<script(|\s+)(data-wpacu-jquery-core-handle=1|data-wpacu-jquery-migrate-handle=1|)(|\s+)data-wpacu-script-handle=\'(.*)\'#Umi',
+            '<script',
+            $htmlSource
+        );
 
 		// Clear possible empty SCRIPT tags (e.g. left from associated 'before' and 'after' tags after their content was stripped)
-		$htmlSource = preg_replace('#<script(\s+)(type=\'text/javascript\'|)(\s+|)></script>#Umi', '', $htmlSource);
+		$htmlSource = preg_replace('#<script(\s+|)(type=\'text/javascript\'|)(\s+|)>(\s+|)</script>#Umi', '', $htmlSource);
+		/* [wpacu_timing] */ Misc::scriptExecTimer($wpacuTimingName, 'end'); /* [/wpacu_timing] */
 
 		/* [wpacu_timing] */ Misc::scriptExecTimer('alter_html_source_for_optimize_js', 'end'); /* [/wpacu_timing] */
 		return $htmlSource;
@@ -842,23 +867,6 @@ class OptimizeJs
 	}
 
 	/**
-	 * @param $strFind
-	 * @param $strReplaceWith
-	 * @param $string
-	 *
-	 * @return mixed
-	 */
-	public static function strReplaceOnce($strFind, $strReplaceWith, $string)
-	{
-		if ( strpos($string, $strFind) === false ) {
-			return $string;
-		}
-
-		$occurrence = strpos($string, $strFind);
-		return substr_replace($string, $strReplaceWith, $occurrence, strlen($strFind));
-	}
-
-	/**
 	 * @param $jsContent
 	 * @param $appendBefore
 	 *
@@ -889,34 +897,6 @@ class OptimizeJs
 		}
 
 		return $jsContent;
-	}
-
-	/**
-	 * e.g. if a script is unloaded, strip any LINK tag that preloads that script (e.g. added by other plugins)
-	 *
-	 * @param $htmlSource
-	 *
-	 * @return array|mixed|string|string[]
-	 */
-	public static function stripAnyReferencesForUnloadedScripts($htmlSource)
-	{
-		// Gather all SRCs of the unloaded scripts (if any)
-		$unloadedScriptRelSrcs = array();
-
-		if ( isset( Main::instance()->allUnloadedAssets['scripts'] ) && ! empty( Main::instance()->allUnloadedAssets['scripts'] ) ) {
-			foreach ( array_unique( Main::instance()->allUnloadedAssets['scripts'] ) as $scriptHandle ) {
-				if ( ! (isset(Main::instance()->wpAllScripts['registered'][ $scriptHandle ]->src) && Main::instance()->wpAllScripts['registered'][ $scriptHandle ]->src) ) {
-					continue; // does not have a "src" (e.g. inline JS)
-				}
-				$unloadedScriptRelSrcs[] = OptimizeCommon::getSourceRelPath( Main::instance()->wpAllScripts['registered'][ $scriptHandle ]->src );
-			}
-		}
-
-		if ( ! empty($unloadedScriptRelSrcs) ) {
-			$htmlSource = OptimizeCommon::matchAndReplaceLinkTags($htmlSource, array('as' => 'script', 'unloaded_assets_rel_sources' => $unloadedScriptRelSrcs));
-		}
-
-		return $htmlSource;
 	}
 
 	/**
@@ -991,8 +971,10 @@ class OptimizeJs
 	 * @param string $returnType
 	 * 'list' - will return the list of plugins that have JS optimization enabled
 	 * 'if_enabled' - will stop when it finds the first one (any order) and return true
+	 *
 	 * @return array|bool
-	 */
+     * @noinspection NestedPositiveIfStatementsInspection
+     */
 	public static function isOptimizeJsEnabledByOtherParty($returnType = 'list')
 	{
 		$pluginsToCheck = array(
@@ -1011,21 +993,21 @@ class OptimizeJs
 
 		foreach ($pluginsToCheck as $plugin => $pluginTitle) {
 			// "Autoptimize" check
-			if ($plugin === 'autoptimize/autoptimize.php' && Misc::isPluginActive($plugin) && get_option('autoptimize_js')) {
+			if ($plugin === 'autoptimize/autoptimize.php' && wpacuIsPluginActive($plugin) && get_option('autoptimize_js')) {
 				$jsOptimizeEnabledIn[] = $pluginTitle;
 
 				if ($returnType === 'if_enabled') { return true; }
 			}
 
 			// "WP Rocket" check
-			if ($plugin === 'wp-rocket/wp-rocket.php' && Misc::isPluginActive($plugin)) {
+			if ($plugin === 'wp-rocket/wp-rocket.php' && wpacuIsPluginActive($plugin)) {
 				if (function_exists('get_rocket_option')) {
 					$wpRocketMinifyJs = get_rocket_option('minify_js');
 					$wpRocketMinifyConcatenateJs = get_rocket_option('minify_concatenate_js');
 				} else {
 					$wpRocketSettings  = get_option('wp_rocket_settings');
-					$wpRocketMinifyJs = isset($wpRocketSettings['minify_js']) ? $wpRocketSettings['minify_js'] : false;
-					$wpRocketMinifyConcatenateJs = isset($wpRocketSettings['minify_concatenate_js']) ? $wpRocketSettings['minify_concatenate_js'] : false;
+					$wpRocketMinifyJs = isset($wpRocketSettings['minify_js']) && $wpRocketSettings['minify_js'];
+					$wpRocketMinifyConcatenateJs = isset($wpRocketSettings['minify_concatenate_js']) && $wpRocketSettings['minify_concatenate_js'];
 				}
 
 				if ($wpRocketMinifyJs || $wpRocketMinifyConcatenateJs) {
@@ -1036,7 +1018,7 @@ class OptimizeJs
 			}
 
 			// "WP Fastest Cache" check
-			if ($plugin === 'wp-fastest-cache/wpFastestCache.php' && Misc::isPluginActive($plugin)) {
+			if ($plugin === 'wp-fastest-cache/wpFastestCache.php' && wpacuIsPluginActive($plugin)) {
 				$wpfcOptionsJson = get_option('WpFastestCache');
 				$wpfcOptions = @json_decode($wpfcOptionsJson, ARRAY_A);
 
@@ -1048,7 +1030,7 @@ class OptimizeJs
 			}
 
 			// "W3 Total Cache" check
-			if ($plugin === 'w3-total-cache/w3-total-cache.php' && Misc::isPluginActive($plugin)) {
+			if ($plugin === 'w3-total-cache/w3-total-cache.php' && wpacuIsPluginActive($plugin)) {
 				$w3tcConfigMaster = Misc::getW3tcMasterConfig();
 				$w3tcEnableJs = (int)trim(Misc::extractBetween($w3tcConfigMaster, '"minify.js.enable":', ','), '" ');
 
@@ -1060,7 +1042,7 @@ class OptimizeJs
 			}
 
 			// "SG Optimizer" check
-			if ($plugin === 'sg-cachepress/sg-cachepress.php' && Misc::isPluginActive($plugin)) {
+			if ($plugin === 'sg-cachepress/sg-cachepress.php' && wpacuIsPluginActive($plugin)) {
 				if (class_exists('\SiteGround_Optimizer\Options\Options') && method_exists('\SiteGround_Optimizer\Options\Options', 'is_enabled')) {
 					if (@\SiteGround_Optimizer\Options\Options::is_enabled( 'siteground_optimizer_optimize_javascript')) {
 						$jsOptimizeEnabledIn[] = $pluginTitle;
@@ -1071,7 +1053,7 @@ class OptimizeJs
 			}
 
 			// "Fast Velocity Minify" check
-			if ($plugin === 'fast-velocity-minify/fvm.php' && Misc::isPluginActive($plugin)) {
+			if ($plugin === 'fast-velocity-minify/fvm.php' && wpacuIsPluginActive($plugin)) {
 				// It's enough if it's active due to its configuration
 				$jsOptimizeEnabledIn[] = $pluginTitle;
 
@@ -1079,7 +1061,7 @@ class OptimizeJs
 			}
 
 			// "LiteSpeed Cache" check
-			if ($plugin === 'litespeed-cache/litespeed-cache.php' && Misc::isPluginActive($plugin) && ($liteSpeedCacheConf = apply_filters('litespeed_cache_get_options', get_option('litespeed-cache-conf')))) {
+			if ($plugin === 'litespeed-cache/litespeed-cache.php' && wpacuIsPluginActive($plugin) && ($liteSpeedCacheConf = apply_filters('litespeed_cache_get_options', get_option('litespeed-cache-conf')))) {
 				if ( (isset($liteSpeedCacheConf['js_minify']) && $liteSpeedCacheConf['js_minify'])
 				     || (isset($liteSpeedCacheConf['js_combine']) && $liteSpeedCacheConf['js_combine']) ) {
 					$jsOptimizeEnabledIn[] = $pluginTitle;
@@ -1089,8 +1071,10 @@ class OptimizeJs
 			}
 
 			// "Swift Performance Lite" check
-			if ($plugin === 'swift-performance-lite/performance.php' && Misc::isPluginActive($plugin)
-			    && class_exists('Swift_Performance_Lite') && method_exists('Swift_Performance_Lite', 'check_option')) {
+			if ($plugin === 'swift-performance-lite/performance.php' &&
+                class_exists('Swift_Performance_Lite') &&
+                method_exists('Swift_Performance_Lite', 'check_option') &&
+                wpacuIsPluginActive($plugin)) {
 				if ( @\Swift_Performance_Lite::check_option('merge-scripts', 1) ) {
 					$jsOptimizeEnabledIn[] = $pluginTitle;
 				}
@@ -1099,7 +1083,7 @@ class OptimizeJs
 			}
 
 			// "Breeze – WordPress Cache Plugin"
-			if ($plugin === 'breeze/breeze.php' && Misc::isPluginActive($plugin)) {
+			if ($plugin === 'breeze/breeze.php' && wpacuIsPluginActive($plugin)) {
 				$breezeBasicSettings    = get_option('breeze_basic_settings');
 				$breezeAdvancedSettings = get_option('breeze_advanced_settings');
 
@@ -1118,19 +1102,6 @@ class OptimizeJs
 	}
 
 	/**
-	 * @return bool
-	 */
-	public static function isWorthCheckingForOptimization()
-	{
-		// At least one of these options have to be enabled
-		// Otherwise, we will not perform specific useless actions and save resources
-		return MinifyJs::isMinifyJsEnabled() ||
-		       Main::instance()->settings['cache_dynamic_loaded_js'] ||
-		       Main::instance()->settings['google_fonts_display'] ||
-		       Main::instance()->settings['google_fonts_remove'];
-	}
-
-	/**
 	 * @param $htmlSource
 	 *
 	 * @return mixed
@@ -1139,7 +1110,7 @@ class OptimizeJs
 	{
 		$ignoreChild = Main::instance()->getIgnoreChildren();
 
-		if (isset($ignoreChild['scripts']) && ! empty($ignoreChild['scripts'])) {
+		if ( ! empty($ignoreChild['scripts']) ) {
 			foreach (array_keys($ignoreChild['scripts']) as $scriptHandle) {
 				if (isset(Main::instance()->wpAllScripts['registered'][$scriptHandle]->src, Main::instance()->ignoreChildren['scripts'][$scriptHandle.'_has_unload_rule']) && ($scriptSrc = Main::instance()->wpAllScripts['registered'][$scriptHandle]->src) && Main::instance()->ignoreChildren['scripts'][$scriptHandle.'_has_unload_rule']) {
 					$toReplaceTagList = array();
@@ -1188,7 +1159,8 @@ class OptimizeJs
 	 * @param string $return ("value": JS Inline Content / "html": JS Inline Content surrounded by tags)
 	 *
 	 * @return array
-	 */
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public static function getInlineAssociatedWithScriptHandle($scriptTagOrHandle, $wpacuRegisteredScripts, $from = 'tag', $return = 'value')
 	{
 		if ($from === 'tag') {
@@ -1208,7 +1180,7 @@ class OptimizeJs
 					$scriptExtraCdata .= $scriptExtraArray['data'] . "\n";
 				}
 
-				if ( isset( $scriptExtraArray['before'] ) && ! empty( $scriptExtraArray['before'] ) ) {
+				if ( ! empty( $scriptExtraArray['before'] ) ) {
 					foreach ( $scriptExtraArray['before'] as $beforeData ) {
 						if ( ! is_bool( $beforeData ) ) {
 							$scriptExtraBefore .= $beforeData . "\n";
@@ -1216,7 +1188,7 @@ class OptimizeJs
 					}
 				}
 
-				if ( isset( $scriptExtraArray['after'] ) && ! empty( $scriptExtraArray['after'] ) ) {
+				if ( ! empty( $scriptExtraArray['after'] ) ) {
 					foreach ( $scriptExtraArray['after'] as $afterData ) {
 						if ( ! is_bool( $afterData ) ) {
 							$scriptExtraAfter .= $afterData . "\n";
@@ -1257,7 +1229,8 @@ class OptimizeJs
 	 * @param string $inlineScriptContent
 	 *
 	 * @return string
-	 */
+     * @noinspection CallableParameterUseCaseInTypeContextInspection
+     */
 	public static function generateInlineAssocHtmlForHandle($handle, $position, $inlineScriptContent = '')
 	{
 		global $wp_scripts;
@@ -1357,7 +1330,7 @@ class OptimizeJs
 			return '';
 		}
 
-		if (isset($matchesSourcesFromTags[0]) && ! empty($matchesSourcesFromTags[0])) {
+		if ( ! empty($matchesSourcesFromTags[0]) ) {
 			foreach ($matchesSourcesFromTags[0] as $matchesFromTag) {
 				if (stripos($matchesFromTag, ' src=') !== false && strip_tags($matchesFromTag) === '') {
 					return $matchesFromTag.'</script>';
@@ -1367,5 +1340,77 @@ class OptimizeJs
 
 		return '';
 	}
+
+    /**
+     * @return bool
+     * @noinspection NestedPositiveIfStatementsInspection
+     */
+    public static function proceedWithJsCombine()
+    {
+        // not on query string request (debugging purposes)
+        if ( isset($_REQUEST['wpacu_no_js_combine']) ) {
+            return false;
+        }
+
+        // No JS files are combined in the Dashboard
+        // Always in the front-end view
+        // Do not combine if there's a POST request as there could be assets loading conditionally
+        // that might not be needed when the page is accessed without POST, making the final JS file larger
+        if (! empty($_POST) || is_admin()) {
+            return false; // Do not combine
+        }
+
+        // Only clean request URIs allowed (with few exceptions)
+        if (strpos($_SERVER['REQUEST_URI'], '?') !== false) {
+            // Exceptions
+            if (! OptimizeCommon::loadOptimizedAssetsIfQueryStrings()) {
+                return false;
+            }
+        }
+
+        if (! OptimizeCommon::doCombineIsRegularPage()) {
+            return false;
+        }
+
+        $pluginSettings = Main::instance()->settings;
+
+        if ($pluginSettings['test_mode'] && ! Menu::userCanManageAssets()) {
+            return false; // Do not combine anything if "Test Mode" is ON
+        }
+
+        if ($pluginSettings['combine_loaded_js'] === '') {
+            return false; // Do not combine
+        }
+
+        if (self::isOptimizeJsEnabledByOtherParty('if_enabled')) {
+            return false; // Do not combine (it's already enabled in other plugin)
+        }
+
+        // "Minify HTML" from WP Rocket is sometimes stripping combined SCRIPT tags
+        // Better uncombined then missing essential SCRIPT files
+        if (Misc::isWpRocketMinifyHtmlEnabled()) {
+            return false;
+        }
+
+        /*
+        if ( ($pluginSettings['combine_loaded_js'] === 'for_admin'
+              || $pluginSettings['combine_loaded_js_for_admin_only'] == 1)
+             && Menu::userCanManageAssets() ) {
+            return true; // Do combine
+        }
+        */
+
+        // "Apply it only for guest visitors (default)" is set; Do not combine if the user is logged in
+        if ( $pluginSettings['combine_loaded_js_for'] === 'guests' && is_user_logged_in() ) {
+            return false;
+        }
+
+        if ( in_array($pluginSettings['combine_loaded_js'], array('for_all', 1)) ) {
+            return true; // Do combine
+        }
+
+        // Finally, return false as none of the checks above matched
+        return false;
+    }
 
 	}

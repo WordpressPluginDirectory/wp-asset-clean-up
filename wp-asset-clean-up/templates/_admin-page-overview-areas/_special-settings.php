@@ -11,12 +11,13 @@ if (! isset($data)) {
 <?php
 $specialSettings = array(
     // Cache plugins caching: clear it or not after Asset CleanUp Lite/Pro caching is cleared
-	'do_not_also_clear_autoptimize_cache'   => (defined('WPACU_DO_NOT_ALSO_CLEAR_AUTOPTIMIZE_CACHE') && WPACU_DO_NOT_ALSO_CLEAR_AUTOPTIMIZE_CACHE),
-	'do_not_also_clear_cache_enabler_cache' => (defined('WPACU_DO_NOT_ALSO_CLEAR_CACHE_ENABLER_CACHE') && WPACU_DO_NOT_ALSO_CLEAR_CACHE_ENABLER_CACHE),
+	'do_not_also_clear_autoptimize_cache'   => wpacuIsDefinedConstant('WPACU_DO_NOT_ALSO_CLEAR_AUTOPTIMIZE_CACHE'),
+	'do_not_also_clear_cache_enabler_cache' => wpacuIsDefinedConstant('WPACU_DO_NOT_ALSO_CLEAR_CACHE_ENABLER_CACHE'),
 
-	'load_on_oxygen_builder_edit'           => (defined('WPACU_LOAD_ON_OXYGEN_BUILDER_EDIT') && WPACU_LOAD_ON_OXYGEN_BUILDER_EDIT),
-	'load_on_divi_builder_edit'             => (defined('WPACU_LOAD_ON_DIVI_BUILDER_EDIT') && WPACU_LOAD_ON_DIVI_BUILDER_EDIT),
-	'load_on_bricks_builder'                => (defined('WPACU_LOAD_ON_BRICKS_BUILDER') && WPACU_LOAD_ON_BRICKS_BUILDER),
+	'load_on_oxygen_builder_edit'           => wpacuIsDefinedConstant('WPACU_LOAD_ON_OXYGEN_BUILDER_EDIT'),
+	'load_on_divi_builder_edit'             => wpacuIsDefinedConstant('WPACU_LOAD_ON_DIVI_BUILDER_EDIT'),
+	'load_on_bricks_builder'                => wpacuIsDefinedConstant('WPACU_LOAD_ON_BRICKS_BUILDER'),
+    'load_on_elementor_builder'             => wpacuIsDefinedConstant('WPACU_LOAD_ON_ELEMENTOR_BUILDER')
 );
 
 $noSpecialSettings = empty(array_filter($specialSettings));
@@ -36,10 +37,10 @@ $noSpecialSettings = empty(array_filter($specialSettings));
 			<div style="margin: 15px 0 0;">
 				<table class="wp-list-table widefat fixed striped">
 					<thead>
-					<tr class="wpacu-top">
-						<td><strong>Setting</strong></td>
-						<td><strong>Description</strong></td>
-					</tr>
+                        <tr class="wpacu-top">
+                            <td><strong>Setting</strong></td>
+                            <td><strong>Description</strong></td>
+                        </tr>
 					</thead>
 					<tbody>
 					<?php
@@ -88,6 +89,15 @@ $noSpecialSettings = empty(array_filter($specialSettings));
 						</tr>
 						<?php
 					}
+
+                    if ($specialSettings['load_on_elementor_builder']) {
+                        ?>
+                        <tr>
+                            <td><span style="color: green;">Load plugin unload rules when using Elementor Builder</span></td>
+                            <td>The constant <code>WPACU_LOAD_ON_ELEMENTOR_BUILDER</code> is set to <code style="color: blue;">true</code>. Whenever you're editing a page using the Elementor plugin, any matching unloading rules set using the following option will take effect: <em>"Plugins Manager" -- "IN THE DASHBOARD /wp-admin/"</em>. <a style="text-decoration: none; white-space: nowrap;" target="_blank" href="https://www.assetcleanup.com/docs/?p=1789"><span class="dashicons dashicons-info"></span> Read more</a></td>
+                        </tr>
+                        <?php
+                    }
 					// [/Page Builders]
 					?>
 					</tbody>

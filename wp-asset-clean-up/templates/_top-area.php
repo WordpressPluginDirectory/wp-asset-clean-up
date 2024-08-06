@@ -8,6 +8,8 @@ if (! isset($data)) {
 
 use WpAssetCleanUp\Main;
 use WpAssetCleanUp\Misc;
+use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 $wpacuTopAreaLinks = array(
 	'admin.php?page=wpassetcleanup_settings' => array(
@@ -71,7 +73,7 @@ $wpacuCurrentPage = isset($data['page']) ? $data['page'] : false;
 
 if (! $wpacuCurrentPage) {
 	$wpacuCurrentPage = str_replace(
-		array(str_replace(' ', '-', strtolower(WPACU_PLUGIN_TITLE)) . '_page_', 'toplevel_page_'),
+		array(str_replace(' ', '-', strtolower(WPACU_PLUGIN_TITLE)) . '_page_', 'toplevel_page_', 'admin_page_'),
 		'',
 		$current_screen->base
 	);
@@ -97,8 +99,7 @@ $isSettingsCurrentPage = ($wpacuCurrentPage !== WPACU_PLUGIN_ID . '_settings');
 
     <div id="wpacu-quick-actions">
         <span class="wpacu-actions-title"><?php _e('QUICK ACTIONS', 'wp-asset-clean-up'); ?>:</span>
-        <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=assetcleanup_clear_assets_cache' . $goBackToCurrentUrl),
-		    'assetcleanup_clear_assets_cache')); ?>">
+        <a class="wpacu-clear-cache-link" href="<?php echo esc_url(OptimizeCommon::generateClearCachingUrl()); ?>">
             <span class="dashicons dashicons-update"></span> <?php _e('Clear CSS/JS Files Cache', 'wp-asset-clean-up'); ?>
         </a>
         |
@@ -121,7 +122,7 @@ $isSettingsCurrentPage = ($wpacuCurrentPage !== WPACU_PLUGIN_ID . '_settings');
 
         if ($isSettingsCurrentPage) {
         ?>
-            </a>
+        </a>
         <?php
         }
         ?>
@@ -141,10 +142,12 @@ $isSettingsCurrentPage = ($wpacuCurrentPage !== WPACU_PLUGIN_ID . '_settings');
 	            $wpacuIsBulkUnloadsPageLink    = ($wpacuInfo['page'] === 'wpassetcleanup_bulk_unloads');
                 $wpacuIsLicensePageLink        = ($wpacuInfo['page'] === 'wpassetcleanup_license');
                 ?>
-                <li class="<?php if ($wpacuIsCurrentPage) { echo 'wpacu-tab-current'; } ?>">
+                <li data-wpacu-top-menu-tab-item="<?php echo $wpacuInfo['page']; ?>"
+                    class="<?php if ($wpacuIsCurrentPage) { echo ' wpacu-tab-current '; }
+                    ?>">
                     <?php
                     if ($wpacuIsAssetsManagerPageLink) {
-                        $totalUnloadedAssets = Misc::getTotalUnloadedAssets('per_page');
+                        $totalUnloadedAssets = MiscAdmin::getTotalUnloadedAssets('per_page');
 
                         if ($totalUnloadedAssets === 0) {
 	                        ?>
@@ -157,16 +160,16 @@ $isSettingsCurrentPage = ($wpacuCurrentPage !== WPACU_PLUGIN_ID . '_settings');
                         }
                     }
 
-                    // [wpacu_lite]
                     if ($wpacuIsPluginsManagerPageLink) {
-		                    ?>
-                            <span class="extra-info assets-unloaded-false"><span class="dashicons dashicons-lock"></span> Premium Feature</span>
-		                    <?php
-                    }
+                    // [wpacu_lite]
+                    ?>
+                    <span class="extra-info assets-unloaded-false"><span class="dashicons dashicons-lock"></span> Premium Feature</span>
+                    <?php
                     // [/wpacu_lite]
+                    }
 
                     if ($wpacuIsBulkUnloadsPageLink) {
-                        $totalBulkUnloadRules = Misc::getTotalBulkUnloadsFor('all');
+                        $totalBulkUnloadRules = MiscAdmin::getTotalBulkUnloadsFor('all');
 
                         if ($totalBulkUnloadRules === 0) {
                             ?>

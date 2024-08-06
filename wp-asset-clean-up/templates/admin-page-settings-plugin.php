@@ -2,15 +2,13 @@
 /*
  * No direct access to this file
  */
+use WpAssetCleanUp\MiscAdmin;
+
 if (! isset($data)) {
     exit;
 }
 
-include_once '_top-area.php';
-
-if (! defined('WPACU_USE_MODAL_BOX')) {
-	define('WPACU_USE_MODAL_BOX', true);
-}
+include_once __DIR__ . '/_top-area.php';
 
 do_action('wpacu_admin_notices');
 
@@ -36,29 +34,55 @@ if ($showSettingsType === 'tabs') {
 		'wpacu-setting-disable-xml-rpc'       => esc_html__( 'Disable XML-RPC', 'wp-asset-clean-up' )
 	);
 
-	$settingsSubTabs = array(
-        'wpacu-google-fonts-optimize',
-        'wpacu-google-fonts-remove'
+    $settingsSubTabs = array(
+        // Tab => Sub Tab
+        'wpacu-setting-plugin-usage-settings' => array(
+            'wpacu-plugin-usage-settings-assets-management',
+            'wpacu-plugin-usage-settings-cache',
+            'wpacu-plugin-usage-settings-accessibility',
+            'wpacu-plugin-usage-settings-analytics',
+            'wpacu-plugin-usage-settings-visibility',
+            'wpacu-plugin-usage-settings-no-load-on-specific-pages'
+        ),
+
+        'wpacu-setting-google-fonts' => array(
+            'wpacu-google-fonts-optimize',
+            'wpacu-google-fonts-remove'
+        )
     );
 
-	$settingsTabActive = 'wpacu-setting-plugin-usage-settings';
+    $settingsTabActive = 'wpacu-setting-plugin-usage-settings';
 
     // Is 'Stripping the "fat"' marked as read? Mark the "General & Files Management" as the default tab
-	$defaultTabArea = ($data['wiki_read'] == 1) ? 'wpacu-setting-plugin-usage-settings' : 'wpacu-setting-strip-the-fat';
+    $defaultTabArea = ($data['wiki_read'] == 1) ? 'wpacu-setting-plugin-usage-settings' : 'wpacu-setting-strip-the-fat';
+    $defaultSubTabArea = 'wpacu-plugin-usage-settings-assets-management';
 
-	$selectedTabArea = isset($_REQUEST['wpacu_selected_tab_area']) && array_key_exists($_REQUEST['wpacu_selected_tab_area'],
-		$settingsTabs) // the tab id area has to be one within the list above
-		? $_REQUEST['wpacu_selected_tab_area'] // after update
-		: $defaultTabArea; // default
+    $selectedTabArea = isset($_REQUEST['wpacu_selected_tab_area']) && array_key_exists($_REQUEST['wpacu_selected_tab_area'],
+        $settingsTabs) // the tab id area has to be the one within the list above
+        ? $_REQUEST['wpacu_selected_tab_area'] // after update
+        : $defaultTabArea; // default
+
+    $allSettingsSubTabs = array();
+
+    foreach ($settingsSubTabs as $mainTab => $subTabs) {
+        $subTabsRef = $subTabs;
+
+        if ($mainTab === $selectedTabArea) {
+            $defaultSubTabArea = reset($subTabsRef);
+        }
+
+        foreach ($subTabs as $subTab) {
+            $allSettingsSubTabs[] = $subTab;
+        }
+    }
 
 	if ($selectedTabArea && array_key_exists($selectedTabArea, $settingsTabs)) {
 		$settingsTabActive = $selectedTabArea;
 	}
 
-	$selectedSubTabArea = isset($_REQUEST['wpacu_selected_sub_tab_area']) && in_array($_REQUEST['wpacu_selected_sub_tab_area'],
-        $settingsSubTabs) // the sub tab id area has to be one within the list above
+	$selectedSubTabArea = isset($_REQUEST['wpacu_selected_sub_tab_area']) && in_array($_REQUEST['wpacu_selected_sub_tab_area'], $allSettingsSubTabs) // the sub tab id area has to be the one within the list above
         ? $_REQUEST['wpacu_selected_sub_tab_area']
-        : ''; // default
+        : $defaultSubTabArea; // default
 }
 ?>
 <div class="wpacu-wrap wpacu-settings-area <?php if ($showSettingsType === 'all') { echo 'wpacu-settings-show-all'; } ?> <?php if ($data['input_style'] !== 'standard') { ?>wpacu-switch-enhanced<?php } else { ?>wpacu-switch-standard<?php } ?>">
@@ -84,20 +108,20 @@ if ($showSettingsType === 'tabs') {
 	                    if ($settingsTabKey === 'wpacu-setting-optimize-css') {
 	                        $cssMinifyStatus  = ($data['minify_loaded_css']  == 1 && empty($data['is_optimize_css_enabled_by_other_party'])) ? $wpacuOptionOn : $wpacuOptionOff;
 		                    $cssCombineStatus = ($data['combine_loaded_css'] == 1 && empty($data['is_optimize_css_enabled_by_other_party'])) ? $wpacuOptionOn : $wpacuOptionOff;
-		                    $wpacuNavTextSub  = '<div class="wpacu-tab-extra-text"><small><span class="wpacu-status-wrap" data-linked-to="wpacu_minify_css_enable">' . $cssMinifyStatus . ' '.__('Minify', 'wp-asset-clean-up').'</span> &nbsp;&nbsp; <span class="wpacu-status-wrap" data-linked-to="wpacu_combine_loaded_css_enable">' . $cssCombineStatus . ' '.__('Combine', 'wp-asset-clean-up').'</span>&nbsp; <span style="color: gray;">+ Defer, Inline</span></small></small></div>';
+		                    $wpacuNavTextSub  = '<div class="wpacu-tab-extra-text"><small><span class="wpacu-status-wrap" data-linked-to="wpacu_minify_css_enable">' . $cssMinifyStatus . ' '.__('Minify', 'wp-asset-clean-up').'</span> &nbsp;&nbsp; <span class="wpacu-status-wrap" data-linked-to="wpacu_combine_loaded_css_enable">' . $cssCombineStatus . ' '.__('Combine', 'wp-asset-clean-up').'</span>&nbsp; <span style="color: grey;">+ Defer, Inline</span></small></div>';
 
-		                    if (! empty($data['is_optimize_css_enabled_by_other_party']) || (defined('WPACU_WP_ROCKET_REMOVE_UNUSED_CSS_ENABLED') && WPACU_WP_ROCKET_REMOVE_UNUSED_CSS_ENABLED)) {
-			                    $wpacuNavTextSub .= '<div style="margin-top: 3px;"><small style="font-weight: lighter; color: gray;"><strong>Status:</strong> Partially locked, already enabled in other plugin(s)</small></div>';
+		                    if ( ! empty($data['is_optimize_css_enabled_by_other_party']) || wpacuIsDefinedConstant('WPACU_WP_ROCKET_REMOVE_UNUSED_CSS_ENABLED') ) {
+			                    $wpacuNavTextSub .= '<div style="margin-top: 3px;"><small style="font-weight: lighter; color: grey;"><strong>Status:</strong> Partially locked, already enabled in other plugin(s)</small></div>';
                             }
 	                    }
 
 	                    if ($settingsTabKey === 'wpacu-setting-optimize-js') {
 		                    $jsMinifyStatus  = ($data['minify_loaded_js']  == 1 && empty($data['is_optimize_js_enabled_by_other_party'])) ? $wpacuOptionOn : $wpacuOptionOff;
 		                    $jsCombineStatus = ($data['combine_loaded_js'] == 1 && empty($data['is_optimize_js_enabled_by_other_party'])) ? $wpacuOptionOn : $wpacuOptionOff;
-		                    $wpacuNavTextSub = '<div class="wpacu-tab-extra-text"><small><span class="wpacu-status-wrap" data-linked-to="wpacu_minify_js_enable">' . $jsMinifyStatus . ' '.__('Minify', 'wp-asset-clean-up').'</span> &nbsp;&nbsp; <span class="wpacu-status-wrap" data-linked-to="wpacu_combine_loaded_js_enable">' . $jsCombineStatus . ' '.__('Combine', 'wp-asset-clean-up').'</span>&nbsp; <span style="color: gray;">+ Defer, Inline</span></small></small></div>';
+		                    $wpacuNavTextSub = '<div class="wpacu-tab-extra-text"><small><span class="wpacu-status-wrap" data-linked-to="wpacu_minify_js_enable">' . $jsMinifyStatus . ' '.__('Minify', 'wp-asset-clean-up').'</span> &nbsp;&nbsp; <span class="wpacu-status-wrap" data-linked-to="wpacu_combine_loaded_js_enable">' . $jsCombineStatus . ' '.__('Combine', 'wp-asset-clean-up').'</span>&nbsp; <span style="color: grey;">+ Defer, Inline</span></small></div>';
 
-		                    if (! empty($data['is_optimize_js_enabled_by_other_party']) || (defined('WPACU_WP_ROCKET_DELAY_JS_ENABLED') && WPACU_WP_ROCKET_DELAY_JS_ENABLED)) {
-			                    $wpacuNavTextSub .= '<div style="margin-top: 3px;"><small style="font-weight: lighter; color: gray;"><strong>Status:</strong> Partially locked, already enabled in other plugin(s)</small></div>';
+		                    if ( ! empty($data['is_optimize_js_enabled_by_other_party']) || wpacuIsDefinedConstant('WPACU_WP_ROCKET_DELAY_JS_ENABLED') ) {
+			                    $wpacuNavTextSub .= '<div style="margin-top: 3px;"><small style="font-weight: lighter; color: grey;"><strong>Status:</strong> Partially locked, already enabled in other plugin(s)</small></div>';
 		                    }
 	                    }
 
@@ -117,7 +141,7 @@ if ($showSettingsType === 'tabs') {
                         <a href="#<?php echo esc_attr($settingsTabKey); ?>"
                            class="wpacu-settings-tab-link <?php echo esc_attr($wpacuActiveTab); ?>"
                            data-wpacu-settings-tab-key="<?php echo esc_attr($settingsTabKey); ?>"><?php
-	                            echo \WpAssetCleanUp\Misc::stripIrrelevantHtmlTags($settingsTabText . $wpacuNavTextSub);
+	                            echo MiscAdmin::stripIrrelevantHtmlTags($settingsTabText . $wpacuNavTextSub);
 	                        ?></a>
                     <?php
                     }
@@ -126,18 +150,18 @@ if ($showSettingsType === 'tabs') {
             <?php } ?>
 
             <?php
-            include_once '_admin-page-settings-plugin-areas/_strip-the-fat.php';
-            include_once '_admin-page-settings-plugin-areas/_plugin-usage-settings.php';
-            include_once '_admin-page-settings-plugin-areas/_test-mode.php';
-            include_once '_admin-page-settings-plugin-areas/_optimize-css.php';
-            include_once '_admin-page-settings-plugin-areas/_optimize-js.php';
-            include_once '_admin-page-settings-plugin-areas/_cdn-rewrite-urls.php';
-            include_once '_admin-page-settings-plugin-areas/_common-files-unload.php';
-            include_once '_admin-page-settings-plugin-areas/_html-source-cleanup.php';
-            include_once '_admin-page-settings-plugin-areas/_fonts-local.php';
-            include_once '_admin-page-settings-plugin-areas/_fonts-google.php';
-            include_once '_admin-page-settings-plugin-areas/_disable-rss-feed.php';
-            include_once '_admin-page-settings-plugin-areas/_disable-xml-rpc-protocol.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_strip-the-fat.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_plugin-usage-settings.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_test-mode.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_optimize-css.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_optimize-js.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_cdn-rewrite-urls.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_common-files-unload.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_html-source-cleanup.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_fonts-local.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_fonts-google.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_disable-rss-feed.php';
+            include_once __DIR__ . '/_admin-page-settings-plugin-areas/_disable-xml-rpc-protocol.php';
             ?>
 
             <div class="clearfix"></div>
@@ -165,7 +189,7 @@ if ($showSettingsType === 'tabs') {
 
 <script type="text/javascript">
     <?php
-    if (! empty($_POST)) {
+    if ( ! empty($_POST) ) {
     ?>
         // Situations: After settings update (post mode), do not jump to URL's anchor
         if (location.hash) {

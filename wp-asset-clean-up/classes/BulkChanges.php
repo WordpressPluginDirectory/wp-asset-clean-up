@@ -51,11 +51,11 @@ class BulkChanges
 	        $values = Main::instance()->getBulkUnload('post_type', $this->wpacuPostType);
         }
 
-	    if (isset($values['styles']) && ! empty($values['styles'])) {
+	    if ( ! empty($values['styles']) ) {
 		    sort($values['styles']);
 	    }
 
-	    if (isset($values['scripts']) && ! empty($values['scripts'])) {
+	    if ( ! empty($values['scripts']) ) {
 		    sort($values['scripts']);
 	    }
 
@@ -68,46 +68,30 @@ class BulkChanges
     public function pageBulkUnloads()
     {
 	    $this->data['assets_info'] = Main::getHandlesInfo();
-	    $this->data['for'] = $this->wpacuFor;
+	    if ( ! isset($this->data['values']) ) {
+            /*
+             * Bulk Unloaded (page types)
+             * e.g. Everywhere, Posts, Pages &amp; Custom Post Types, Taxonomies, etc.
+            */
+	        $this->data['for'] = $this->wpacuFor;
 
-        if ($this->wpacuFor === 'post_types') {
-            $this->data['post_type'] = $this->wpacuPostType;
+	        if ( $this->wpacuFor === 'post_types' ) {
+		        $this->data['post_type'] = $this->wpacuPostType;
 
-            // Get All Post Types
-            $postTypes = get_post_types(array('public' => true));
-		        $this->data['post_types_list'] = Misc::filterPostTypesList( $postTypes );
+		        // Get All Public Post Types List
+		        $postTypes                     = get_post_types( array( 'public' => true ) );
+		        $this->data['post_types_list'] = MiscAdmin::filterPostTypesList( $postTypes );
 	        }
 
-        $this->data['values'] = $this->getCount();
+            $this->data['values'] = $this->getCount();
+        }
 
         $this->data['nonce_name'] = Update::NONCE_FIELD_NAME;
         $this->data['nonce_action'] = Update::NONCE_ACTION_NAME;
 
         $this->data['plugin_settings'] = Main::instance()->settings;
 
-        Main::instance()->parseTemplate('admin-page-settings-bulk-changes', $this->data, true);
-    }
-
-    /**
-     * @param $postTypes
-     *
-     * @return mixed
-     */
-    public function filterPostTypesList($postTypes)
-    {
-        foreach ($postTypes as $postTypeKey => $postTypeValue) {
-            // Exclude irrelevant custom post types
-            if (in_array($postTypeKey, MetaBoxes::$noMetaBoxesForPostTypes)) {
-                unset($postTypes[$postTypeKey]);
-            }
-
-            // Polish existing values
-            if ($postTypeKey === 'product' && Misc::isPluginActive('woocommerce/woocommerce.php')) {
-                $postTypes[$postTypeKey] = 'product &#10230; WooCommerce';
-            }
-        }
-
-        return $postTypes;
+        MainAdmin::instance()->parseTemplate('admin-page-settings-bulk-changes', $this->data, true);
     }
 
 	/**
@@ -172,13 +156,13 @@ class BulkChanges
             }
         }
 
-        if ($this->wpacuFor === 'post_types') {
-            $removed = $wpacuUpdate->removeBulkUnloads($this->wpacuPostType);
+	    if ($this->wpacuFor === 'post_types') {
+		    $removed = $wpacuUpdate->removeBulkUnloads($this->wpacuPostType);
 
-            if ($removed) {
-                add_action('wpacu_admin_notices', array($this, 'noticePostTypesRemoved'));
-            }
-        }
+		    if ($removed) {
+			    add_action('wpacu_admin_notices', array($this, 'noticePostTypesRemoved'));
+		    }
+	    }
     }
 
     /**
@@ -213,6 +197,6 @@ class BulkChanges
 				?>
             </p>
         </div>
-        <?php
-    }
+		<?php
+	}
 }

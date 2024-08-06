@@ -1,4 +1,6 @@
 <?php
+use WpAssetCleanUp\MiscAdmin;
+
 if (! isset($data)) {
 	exit;
 }
@@ -10,6 +12,7 @@ if (! isset($data)) {
     foreach ($data['active_plugins'] as $pluginData) {
 	    $data['plugin_path'] = $pluginPath = $pluginData['path'];
         list($pluginDir) = explode('/', $pluginPath);
+
         ob_start();
         ?>
         <tr>
@@ -34,7 +37,7 @@ if (! isset($data)) {
 
                 <!-- [Start] Unload Rules -->
                 <?php
-                include '_dash-areas/_unloads.php';
+                include __DIR__ . '/_dash-areas/_unloads.php';
                 ?>
                 <!-- [End] Unload Rules -->
             </td>
@@ -58,7 +61,7 @@ if (! isset($data)) {
         <table class="wp-list-table wpacu-list-table widefat plugins striped">
             <?php
             foreach ( $pluginsRows['always_loaded'] as $pluginRowOutput ) {
-                echo \WpAssetCleanUp\Misc::stripIrrelevantHtmlTags($pluginRowOutput) . "\n";
+                echo MiscAdmin::stripIrrelevantHtmlTags($pluginRowOutput) . "\n";
             }
             ?>
         </table>

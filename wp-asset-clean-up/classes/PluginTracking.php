@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 /**
@@ -15,24 +17,9 @@ class PluginTracking
 	public $data;
 
 	/**
-	 * Initiate Settings Class
-	 *
-	 * @var Settings
-	 */
-	public $settings;
-
-	/**
 	 * @var bool
 	 */
 	public $showTrackingNotice = false;
-
-	/**
-	 * PluginTracking constructor.
-	 */
-	public function __construct()
-	{
-		$this->settings = new Settings();
-	}
 
 	/**
 	 *
@@ -43,7 +30,7 @@ class PluginTracking
 		add_action('wp',   array($this, 'scheduleEvents' ));
 		add_action('init', array($this, 'scheduleSend' ));
 
-		// Triggers when Buttons from the Top Notice are clicked and page is reloaded (non-AJAX call)
+		// Triggers when Buttons from the Top Notice are clicked and the page is reloaded (non-AJAX call)
         // This is a fallback in case there are JS errors and the AJAX call is not triggering
         if (isset($_GET['wpacu_is_page_reload']) && $_GET['wpacu_is_page_reload']) {
 	        add_action('admin_init', array($this, 'optInOut' ));
@@ -80,7 +67,7 @@ class PluginTracking
 	        $redirect = false;
         }
 
-	    $wpacuAction = isset($_REQUEST['wpacu_action']) ? $_REQUEST['wpacu_action'] : '';
+	    $wpacuAction = $_REQUEST['wpacu_action'];
 
 	    if ($wpacuAction === 'wpacu_opt_into_tracking') {
 		    $response = $this->checkForOptIn();
@@ -104,7 +91,7 @@ class PluginTracking
 	 */
 	public function scheduleEvents()
 	{
-		$this->weeklyEvents();
+		$this->_weeklyEvents();
 	}
 
 	/**
@@ -114,7 +101,7 @@ class PluginTracking
 	 * @since 1.6
 	 * @return void
 	 */
-	private function weeklyEvents()
+	private function _weeklyEvents()
 	{
 		if (! wp_next_scheduled('wpacu_weekly_scheduled_events')) {
 			wp_schedule_event(current_time('timestamp', true), 'weekly', 'wpacu_weekly_scheduled_events');
@@ -127,9 +114,10 @@ class PluginTracking
 	 * @access private
 	 * @return bool
 	 */
-	private function trackingAllowed()
+	private function _trackingAllowed()
 	{
-		$allowUsageTracking = $this->settings->getOption('allow_usage_tracking');
+        $settingsAdminClass = new SettingsAdmin();
+		$allowUsageTracking = $settingsAdminClass->getOption('allow_usage_tracking');
 		return (bool) $allowUsageTracking;
 	}
 	/**
@@ -198,12 +186,12 @@ class PluginTracking
 			return false;
 		}
 
-		if (! $override && ! $this->trackingAllowed()) {
+		if (! $override && ! $this->_trackingAllowed()) {
 			return false;
 		}
 
 		// Send a maximum of once per week
-		$lastSend = $this->getLastSend();
+		$lastSend = $this->_getLastSend();
 
 		if ( ! $ignoreLastCheckIn && is_numeric($lastSend) && $lastSend > strtotime('-1 week')) {
 			return 'Not Sent: Only Weekly';
@@ -252,8 +240,10 @@ class PluginTracking
 			return;
 		}
 
+        $settingsAdminClass = new SettingsAdmin();
+
 		// Update the value in the "Settings" area
-		$this->settings->updateOption('allow_usage_tracking', 1);
+        $settingsAdminClass->updateOption('allow_usage_tracking', 1);
 
 		// Send the tracking data
 		$response = $this->sendCheckIn(true);
@@ -274,7 +264,8 @@ class PluginTracking
 		}
 
 		// Disable tracking option from "Settings" and mark the notice as hidden (to not show again)
-		$this->settings->deleteOption('allow_usage_tracking');
+        $settingsAdminClass = new SettingsAdmin();
+        $settingsAdminClass->deleteOption('allow_usage_tracking');
 		Misc::addUpdateOption(WPACU_PLUGIN_ID . '_hide_tracking_notice', 1);
 
 		return 'success';
@@ -286,7 +277,7 @@ class PluginTracking
 	 * @access private
 	 * @return false|string
 	 */
-	private function getLastSend()
+	private function _getLastSend()
 	{
 		return get_option(WPACU_PLUGIN_ID . '_tracking_last_send');
 	}
@@ -318,13 +309,15 @@ class PluginTracking
 			return true;
 		}
 
-		// If another Asset CleanUp notice (e.g. for plugin review) is already shown
+		// If another Asset CleanUp notice (e.g. for plugin review) is already shown,
         // don't also show this one below/above it
 		if (defined('WPACU_ADMIN_REVIEW_NOTICE_SHOWN')) {
 		    return false;
         }
 
-		if ($this->settings->getOption('allow_usage_tracking')) {
+        $settingsAdminClass = new SettingsAdmin();
+
+		if ($settingsAdminClass->getOption('allow_usage_tracking')) {
 			return false;
 		}
 
@@ -531,9 +524,7 @@ class PluginTracking
 			</div>
 		</div>
 		<?php
-        if (! defined('WPACU_ADMIN_TRACKING_NOTICE_SHOWN')) {
-	        define('WPACU_ADMIN_TRACKING_NOTICE_SHOWN', true);
-        }
+        wpacuDefineConstant('WPACU_ADMIN_TRACKING_NOTICE_SHOWN');
 
         // Only mark it as shown after it was printed
 		$this->showTrackingNotice = true;

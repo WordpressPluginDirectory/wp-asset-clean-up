@@ -1,5 +1,7 @@
 <?php
 // no direct access
+use WpAssetCleanUp\MiscAdmin;
+
 if (! isset($data)) {
 	exit;
 }
@@ -14,14 +16,12 @@ $listAreaStatus = $data['plugin_settings']['assets_list_layout_areas_status'];
 if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
 	require_once __DIR__.'/_assets-top-area.php';
 
-	$data['view_by_preload'] =
 	$data['rows_build_array'] =
 	$data['rows_by_preload'] = true;
 
 	$data['rows_assets'] = array();
 
-	require_once __DIR__.'/_asset-style-rows.php';
-	require_once __DIR__.'/_asset-script-rows.php';
+	require_once __DIR__.'/_asset-rows.php';
 
 	$preloadsText = array(
         'preloaded'     => '<span class="dashicons dashicons-upload"></span>&nbsp; '.esc_html__('Preloaded assets (.css &amp; .js)', 'wp-asset-clean-up'),
@@ -69,7 +69,7 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
 	                <?php } ?>
 
 					<?php if ($preloadStatus === 'preloaded') { ?>
-                        <p class="wpacu-assets-note">This is the list of assets (if any) that were chosen to be preloaded through the <span style="background: #e8e8e8; padding: 2px;">&lt;link rel="preload"&gt;</span> tag (any valid option from "Preload (if kept loaded)?" drop-down). Note that the preload option is obviously irrelevant if the asset was chosen to be unloaded. The preload option is ONLY relevant for the assets that are loading in the page.</p>
+                        <p class="wpacu-assets-note">This is the list of assets (if any) that were chosen to be preloaded through the <span style="background: #e8e8e8; padding: 2px;">&lt;link rel="preload"&gt;</span> tag (any valid option from "Preload?" drop-down). Note that the preload option is obviously irrelevant if the asset was chosen to be unloaded. The preload option is ONLY relevant for the assets that are loading in the page.</p>
 					    <?php
                         if (count($values) < 1) {
                         ?>
@@ -86,7 +86,7 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
                                data-wpacu-area="<?php echo esc_html($preloadStatus); ?>_assets">
                             <tbody>
 							<?php
-							echo \WpAssetCleanUp\Misc::stripIrrelevantHtmlTags($assetRowsOutput);
+							echo MiscAdmin::stripIrrelevantHtmlTags($assetRowsOutput);
 							?>
                             </tbody>
                         </table>
@@ -97,19 +97,10 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
 		}
 	}
 }
-
-if ( isset( $data['all']['hardcoded'] ) && ! empty( $data['all']['hardcoded'] ) ) {
-	$data['print_outer_html'] = true; // AJAX call from the Dashboard
-	include_once __DIR__ . '/_assets-hardcoded-list.php';
-} elseif (isset($data['is_frontend_view']) && $data['is_frontend_view']) {
-	echo \WpAssetCleanUp\HardcodedAssets::getHardCodedManageAreaForFrontEndView($data); // AJAX call from the front-end view
-}
 /*
 * ------------------------------------
 * [END] BY PRELOAD STATUS (yes or no)
 * ------------------------------------
 */
 
-include_once __DIR__ . '/_page-options.php';
-
-include '_inline_js.php';
+include_once __DIR__ . '/_view-common-footer.php';

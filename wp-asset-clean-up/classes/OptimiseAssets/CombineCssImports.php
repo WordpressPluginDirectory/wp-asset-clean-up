@@ -1,10 +1,12 @@
 <?php
+/** @noinspection OffsetOperationsInspection */
+/** @noinspection SlowArrayOperationsInLoopInspection */
+
 namespace WpAssetCleanUp\OptimiseAssets;
 
-use MatthiasMullie\Minify\Minify;
-
-use MatthiasMullie\PathConverter\ConverterInterface;
-use MatthiasMullie\PathConverter\Converter;
+if ( ! class_exists('\MatthiasMullieWpacu\Minify\Minify') ) {
+    require_once WPACU_PLUGIN_DIR . '/vendor/autoload.php';
+}
 
 /**
  * Combine CSS Imports extended from CSS minifier
@@ -17,7 +19,7 @@ use MatthiasMullie\PathConverter\Converter;
  * @copyright Copyright (c) 2012, Matthias Mullie. All rights reserved
  * @license MIT License
  */
-class CombineCssImports extends Minify
+class CombineCssImports extends \MatthiasMullieWpacu\Minify\Minify
 {
 	/**
 	 * @var int maximum import size in kB
@@ -26,7 +28,8 @@ class CombineCssImports extends Minify
 
 	/**
 	 * @var string[] valid import extensions
-	 */
+     * @noinspection PropertyCanBeStaticInspection
+     */
 	protected $importExtensions = array(
 		'gif' => 'data:image/gif',
 		'png' => 'data:image/png',
@@ -238,13 +241,13 @@ class CombineCssImports extends Minify
 		// RegEx Source: https://blog.ostermiller.org/finding-comments-in-source-code-using-regular-expressions/
 		preg_match_all('#/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/#', $css, $commentsMatches);
 
-		if (isset($commentsMatches[0]) && ! empty($commentsMatches[0])) {
+		if ( ! empty($commentsMatches[0]) ) {
 			foreach ($commentsMatches[0] as $commentMatch) {
-				if (strpos($commentMatch, '@import') === false) {
+				if (stripos($commentMatch, '@import') === false) {
 					continue; // the comment needs to have @import
 				}
 
-				$newComment = str_replace('@import', '(wpacu)(at)import', $commentMatch);
+				$newComment = str_ireplace('@import', '(wpacu)(at)import', $commentMatch);
 				$css = str_replace($commentMatch, $newComment, $css);
 			}
 		}
@@ -349,12 +352,12 @@ class CombineCssImports extends Minify
 	 * will have to be updated when a file is being saved at another location
 	 * (e.g. ../../images/image.gif, if the new CSS file is 1 folder deeper).
 	 *
-	 * @param ConverterInterface $converter Relative path converter
+	 * @param \MatthiasMullieWpacu\PathConverter\ConverterInterface $converter Relative path converter
 	 * @param string             $content   The CSS content to update relative urls for
 	 *
 	 * @return string
 	 */
-	protected function move(ConverterInterface $converter, $content)
+	protected function move(\MatthiasMullieWpacu\PathConverter\ConverterInterface $converter, $content)
 	{
 		/*
 		 * Relative path references will usually be enclosed by url(). @import
@@ -428,7 +431,7 @@ class CombineCssImports extends Minify
 		// loop all urls
 		foreach ($matches as $match) {
 			// determine if it's an url() or an @import match
-			$type = (strpos($match[0], '@import') === 0 ? 'import' : 'url');
+			$type = (strncmp($match[0], '@import', 7) === 0 ? 'import' : 'url');
 
 			$url = $match['path'];
 			if ($this->canImportByPath($url)) {
@@ -505,10 +508,10 @@ class CombineCssImports extends Minify
 	 * @param string $source
 	 * @param string $target
 	 *
-	 * @return ConverterInterface
+	 * @return \MatthiasMullieWpacu\PathConverter\Converter
 	 */
 	protected function getPathConverter($source, $target)
 	{
-		return new Converter($source, $target);
+		return new \MatthiasMullieWpacu\PathConverter\Converter($source, $target);
 	}
 }

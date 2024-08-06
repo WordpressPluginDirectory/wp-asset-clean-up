@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 /**
@@ -12,8 +14,8 @@ class AjaxSearchAutocomplete
 	 */
 	public function __construct()
 	{
-		add_action('admin_enqueue_scripts', array($this, 'enqueueScripts'));
-		add_action('wp_ajax_' . WPACU_PLUGIN_ID . '_autocomplete_search', array($this, 'wpAjaxSearch'));
+		add_action('admin_enqueue_scripts', array($this, 'adminEnqueueScripts'));
+		add_action('wp_ajax_' . WPACU_PLUGIN_ID . '_autocomplete_search', array($this, 'wpAdminAjaxSearch'));
 
 		self::maybePreventWpmlPluginFromFiltering();
 	}
@@ -29,7 +31,7 @@ class AjaxSearchAutocomplete
 		if ( ! (isset($_REQUEST['action'], $_REQUEST['wpacu_term'], $GLOBALS['sitepress']) &&
 		    $_REQUEST['action'] === WPACU_PLUGIN_ID . '_autocomplete_search' &&
 		    $_REQUEST['wpacu_term'] &&
-		    Misc::isPluginActive('sitepress-multilingual-cms/sitepress.php')) ) {
+		    wpacuIsPluginActive('sitepress-multilingual-cms/sitepress.php')) ) {
 			return;
 		}
 
@@ -61,8 +63,8 @@ class AjaxSearchAutocomplete
 
 	/**
 	 * Only valid for "CSS & JS Manager" -- "Manage CSS/JS" -- ("Posts" | "Pages" | "Custom Post Types" | "Media")
-	 */
-	public function enqueueScripts()
+     */
+	public function adminEnqueueScripts()
     {
 	    if (! isset($_REQUEST['wpacu_for'])) {
 			return;
@@ -72,7 +74,7 @@ class AjaxSearchAutocomplete
 		$subPage = isset($_GET['wpacu_sub_page']) ? $_GET['wpacu_sub_page'] : 'manage_css_js';
 
 		$loadAutoCompleteOnManageCssJsDash = ($isManageCssJsDash && $subPage === 'manage_css_js') &&
-			in_array($_REQUEST['wpacu_for'], array('posts', 'pages', 'media-attachment', 'custom-post-types'));
+			in_array($_REQUEST['wpacu_for'], array('posts', 'pages', 'media_attachment', 'custom_post_types'));
 
 		if ( ! $loadAutoCompleteOnManageCssJsDash ) {
 			return;
@@ -87,11 +89,11 @@ class AjaxSearchAutocomplete
 		    case 'pages':
 			    $forPostType = 'page';
 			    break;
-		    case 'media-attachment':
+		    case 'media_attachment':
 		    	$forPostType = 'attachment';
 		    	break;
-		    case 'custom-post-types':
-		    	$forPostType = 'wpacu-custom-post-types';
+		    case 'custom_post_types':
+		    	$forPostType = 'wpacu_custom_post_types';
 		    	break;
 		    default:
 			    $forPostType = '';
@@ -132,41 +134,41 @@ CSS;
     }
 
 	/**
-	 *
-	 */
-	public function wpAjaxSearch()
+     * @noinspection NestedAssignmentsUsageInspection
+     */
+	public function wpAdminAjaxSearch()
     {
 		check_ajax_referer('wpacu_autocomplete_search_nonce', 'wpacu_security');
 
 		global $wpdb;
 
-		$search_term = isset($_REQUEST['wpacu_term'])      ? sanitize_text_field($_REQUEST['wpacu_term']) : '';
-		$post_type   = isset($_REQUEST['wpacu_post_type']) ? sanitize_text_field($_REQUEST['wpacu_post_type']) : '';
+		$searchTerm = isset($_REQUEST['wpacu_term'])      ? sanitize_text_field($_REQUEST['wpacu_term']) : '';
+		$postType   = isset($_REQUEST['wpacu_post_type']) ? sanitize_text_field($_REQUEST['wpacu_post_type']) : '';
 
-		if ( $search_term === '' ) {
+		if ( $searchTerm === '' ) {
 			echo wp_json_encode(array());
 		}
 
 		$results = array();
 
-	    if ($post_type !== 'attachment') {
+	    if ($postType !== 'attachment') {
 	    	// 'post', 'page', custom post types
 		    $queryDataByKeyword = array(
-			    'post_type'        => $post_type,
-			    's'                => $search_term,
+			    'post_type'        => $postType,
+			    's'                => $searchTerm,
 			    'post_status'      => array( 'publish', 'private' ),
 			    'posts_per_page'   => -1,
 			    'suppress_filters' => true
 		    );
 	    } else {
 	    	// 'attachment'
-		    $search = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT ID FROM {$wpdb->posts} WHERE post_title = '%s'", $search_term ) );
+		    $postIdsFromQuery = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT ID FROM `{$wpdb->posts}` WHERE post_title='%s'", $searchTerm ) );
 		    $queryDataByKeyword = array(
-			    'post_type' => 'attachment',
-			    'post_status' => 'inherit',
-			    'orderby' => 'date',
-			    'order' => 'DESC',
-			    'post__in' => $search,
+			    'post_type'        => 'attachment',
+			    'post_status'      => 'inherit',
+			    'orderby'          => 'date',
+			    'order'            => 'DESC',
+			    'post__in'         => $postIdsFromQuery,
 			    'suppress_filters' => true
 		    );
 	    }
@@ -175,14 +177,13 @@ CSS;
 		$query = new \WP_Query($queryDataByKeyword);
 
 		// No results? Search by ID in case the admin put the post/page ID in the search box
-	    if (! $query->have_posts()) {
+	    if ((int)$searchTerm > 0 && ! $query->have_posts()) {
 	    	// This one works for any post type, including 'attachment'
 		    $queryDataByID = array(
-			    'post_type'        => $post_type,
-			    'p'                => $search_term,
+			    'post_type'        => $postType,
 			    'post_status'      => array( 'publish', 'private' ),
 			    'posts_per_page'   => -1,
-			    'post__in'         => $search_term,
+			    'post__in'         => array((int)$searchTerm),
 			    'suppress_filters' => true
 		    );
 
@@ -192,7 +193,7 @@ CSS;
 		if ($query->have_posts()) {
 			$pageOnFront = $pageForPosts = false;
 
-			if ($post_type === 'page' && get_option('show_on_front') === 'page') {
+			if ($postType === 'page' && get_option('show_on_front') === 'page') {
 				$pageOnFront  = (int)get_option('page_on_front');
 				$pageForPosts = (int)get_option('page_for_posts');
 			}

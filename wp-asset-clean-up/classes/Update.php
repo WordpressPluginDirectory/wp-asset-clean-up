@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
@@ -111,7 +113,7 @@ HTML;
 	 */
 	public function triggersAfterInit()
     {
-	    if (! is_admin() && Main::instance()->frontendShow()) {
+	    if (! is_admin() && AssetsManager::instance()->frontendShow()) {
 		    if (! empty($_POST)) {
 			    $wpacuAction = Misc::isElementorMaintenanceModeOn() ? 'template_redirect' : 'wp';
 
@@ -143,7 +145,7 @@ HTML;
 
         $updateAction = Misc::getVar('post', 'wpacu_update_asset_frontend');
 
-        if ($updateAction != 1 || ! Main::instance()->frontendShow()) {
+        if ($updateAction != 1 || ! AssetsManager::instance()->frontendShow()) {
             return;
         }
 
@@ -162,11 +164,11 @@ HTML;
         $this->frontEndUpdateTriggered = true;
 
         // Was the Assets List Layout changed?
-        self::updateAssetListLayoutSettings();
+        self::updateSettingsChangedOutsideTheMainArea();
 
         // Form submitted from the homepage
 	    // e.g. from a page such as latest blog posts, not a static page that was selected as home page
-        if (Misc::isHomePage() && Misc::getShowOnFront() !== 'page') {
+        if (MainFront::isHomePage() && Misc::getShowOnFront() !== 'page') {
 	        $wpacuNoLoadAssets = Misc::getVar('post', WPACU_PLUGIN_ID, array());
 
             $this->updateFrontPage($wpacuNoLoadAssets);
@@ -187,12 +189,12 @@ HTML;
         }
 
         // Any preloads
-	    Preloads::updatePreloads();
+	    self::updatePreloads();
 
         // Any handle notes?
 	    self::updateHandleNotes();
 
-	    // Any always load it if user is logged in?
+	    // Any always load it if a user is logged in?
         self::saveGlobalLoadExceptions();
 
 	    // Any ignore deps
@@ -202,15 +204,22 @@ HTML;
     }
 
 	/**
-	 *
+	 * Specific changes can be applied to "Settings" outside its main area
+     * e.g. "Assets List Layout" can be updated within a CSS/JS manager; Its location is in "Settings" -- "Plugin Usage Preferences" -- "Assets List Layout")
 	 */
-	public static function updateAssetListLayoutSettings()
+	public static function updateSettingsChangedOutsideTheMainArea()
     {
-	    // Was the Assets List Layout changed?
+	    // Was the Assets' List Layout changed?
 	    if ($assetsListLayout = Misc::getVar('post', 'wpacu_assets_list_layout')) {
-		    $settingsClass = new Settings();
-		    $settingsClass->updateOption('assets_list_layout', $assetsListLayout);
+		    $settingsAdminClass = new SettingsAdmin();
+            $settingsAdminClass->updateOption('assets_list_layout', $assetsListLayout);
 	    }
+
+        // Was the retrieval way changed for the CSS/JS list?
+        if ($domGetType = Misc::getVar('post', 'wpacu_dom_get_type')) {
+            $settingsAdminClass = new SettingsAdmin();
+            $settingsAdminClass->updateOption('dom_get_type', $domGetType);
+        }
     }
 
 	/**
@@ -253,7 +262,7 @@ HTML;
 
 	    $location .= $extraParamsSign . http_build_query($paramsToAdd) . '#wpacu_wrap_assets';
 
-	    set_transient('wpacu_page_just_updated', 1, 30);
+	    set_transient(WPACU_PLUGIN_ID . '_frontend_assets_manager_just_updated', 1, 30);
 
 	    wp_safe_redirect($location);
 	    exit();
@@ -269,19 +278,9 @@ HTML;
 	 */
 	public function savePosts($postId)
     {
-	    $postIdsToUpdate = array($postId); // default (it's just this one if there aren't any associated posts)
+        $allPostIdsToUpdate = apply_filters('wpacu_get_all_assoc_post_ids', $postId);
 
-        $anyAssocPostIds = apply_filters('wpacu_get_all_assoc_post_ids', $postId);
-
-        if ( ! empty($anyAssocPostIds)) {
-            foreach ($anyAssocPostIds as $assocPostId) {
-                $postIdsToUpdate[] = $assocPostId;
-            }
-        }
-
-	    $postIdsToUpdate = array_unique($postIdsToUpdate);
-
-        foreach ($postIdsToUpdate as $postIdToUpdate) {
+        foreach ($allPostIdsToUpdate as $postIdToUpdate) {
 		    $postObj = get_post( $postIdToUpdate );
 		    $this->savePost( $postIdToUpdate, $postObj );
 	    }
@@ -294,34 +293,35 @@ HTML;
 	 */
 	public function getAllAssocPostIds($postId)
     {
-	    $assocPostIds = array();
+	    $allPostIds = array($postId); // default (original post ID)
 
         // "WPML Multilingual CMS" compatibility: Syncing post changes on all its associated translated posts
         // e.g. if a page in Spanish is having a CSS unloaded, then that unload will also apply for the German version of the page
         // If, for any reason, one wants to stop syncing on translated pages, the following snippet could be used in functions.php (Child Theme)
         // add_filter('wpacu_manage_assets_update_sync_wpml_translated_posts', '__return_false');
-        if (Misc::isPluginActive('sitepress-multilingual-cms/sitepress.php')
-            && apply_filters('wpacu_manage_assets_update_sync_wpml_translated_posts', true)) {
+        if ( wpacuIsPluginActive('sitepress-multilingual-cms/sitepress.php')
+             && apply_filters('wpacu_manage_assets_update_sync_wpml_translated_posts', true) ) {
             $translations = self::getAnyAssocTranslationsForWpml($postId);
 
             if ( ! empty($translations) ) {
 	            foreach ( $translations as $translation ) {
                     if (isset($translation->element_id) && $translation->element_id) {
-	                    $assocPostIds[] = (int) $translation->element_id;
+	                    $allPostIds[] = (int) $translation->element_id;
                     }
 	            }
             }
         }
 
-        return array_unique($assocPostIds);
+        return array_unique($allPostIds);
     }
 
 	/**
-	 * @param $postId
+	 * @param $elementId
+     * @param string $elementRefType
 	 *
 	 * @return mixed|null
 	 */
-	public static function getAnyAssocTranslationsForWpml($postId)
+	public static function getAnyAssocTranslationsForWpml($elementId, $elementRefType = 'post')
     {
         global $wpdb;
 
@@ -329,19 +329,28 @@ HTML;
         // and all other posts were created as an association with this language
         // We'll need to check that
         // Source: https://techoverflow.net/2017/03/08/get-the-original-language-post-id-for-wpml-translated-posts/
+        $elementRefTypeLengthForMySql = strlen($elementRefType) + 1;
+
         $sqlQuery = <<<SQL
-SELECT trans2.element_id
+SELECT trans2.element_id, trans2.element_type
 FROM `{$wpdb->prefix}icl_translations` AS trans1
 INNER JOIN `{$wpdb->prefix}icl_translations` AS trans2 ON (trans2.trid = trans1.trid)
-WHERE trans1.element_id='%d' AND trans2.source_language_code IS NULL
+WHERE trans1.element_id = '%d' 
+  AND SUBSTR(trans1.element_type, 1, {$elementRefTypeLengthForMySql}) = '%s' 
+  AND trans2.source_language_code IS NULL
 SQL;
-	    $sqlQueryPrepared = $wpdb->prepare($sqlQuery, array($postId));
-        $mainLanguagePostId = $wpdb->get_var($sqlQueryPrepared);
+	    $sqlQueryPrepared = $wpdb->prepare($sqlQuery, array($elementId, $elementRefType . '_'));
 
-	    $type = apply_filters( 'wpml_element_type', get_post_type( $mainLanguagePostId ) );
-	    $trid = apply_filters( 'wpml_element_trid', false, $mainLanguagePostId, $type );
+        $result = $wpdb->get_row($sqlQueryPrepared, ARRAY_A);
 
-	    return apply_filters( 'wpml_get_element_translations', array(), $trid, $type );
+        if ( ! isset($result['element_type']) ) {
+            return array();
+        }
+
+	    $type = apply_filters( 'wpml_element_type', $result['element_type'] );
+	    $trId = apply_filters( 'wpml_element_trid', false, $elementId, $type );
+
+	    return apply_filters( 'wpml_get_element_translations', array(), $trId, $type );
     }
 
     /**
@@ -412,8 +421,8 @@ SQL;
             }
         }
 
-        // Was the Assets List Layout changed?
-	    self::updateAssetListLayoutSettings();
+        // Was the Assets' List Layout changed?
+	    self::updateSettingsChangedOutsideTheMainArea();
 
         // If globally disabled, make an exception to load for submitted assets
         $this->saveLoadExceptions('post', $postId);
@@ -427,7 +436,7 @@ SQL;
 	    $this->removeBulkUnloads($post->post_type);
 
         // Any preloads
-	    Preloads::updatePreloads();
+	    self::updatePreloads();
 
 	    // Any handle notes
 	    self::updateHandleNotes();
@@ -444,7 +453,7 @@ SQL;
 
 	    // In case Combine CSS/JS was enabled and there are traces of JSON files in the caching directory
         // Clear them if the caching timing expired as they are not relevant anymore and reduce the disk's space
-	    OptimizeCommon::clearJsonStorageForPost($postId, true);
+	    OptimizeCommon::clearItemStorageForPost($postId, true);
 
         self::afterPostUpdate($postId);
 
@@ -497,7 +506,7 @@ SQL;
         }
 
 	    // Was the Assets List Layout changed?
-	    self::updateAssetListLayoutSettings();
+	    self::updateSettingsChangedOutsideTheMainArea();
 
         $jsonNoAssetsLoadList = wp_json_encode( $wpacuNoLoadAssets );
 	    Misc::addUpdateOption( WPACU_PLUGIN_ID . '_front_page_no_load', $jsonNoAssetsLoadList );
@@ -509,7 +518,7 @@ SQL;
 		$this->updateEverywhereUnloads();
 
 	    // Any preloads
-	    Preloads::updatePreloads();
+	    self::updatePreloads();
 
 		// Any handle notes
         self::updateHandleNotes();
@@ -634,7 +643,8 @@ SQL;
         foreach (array('styles', 'scripts') as $assetType) {
             $postKey    = ($assetType === 'styles') ? 'wpacu_styles_load_it' : 'wpacu_scripts_load_it';
             $optionsKey = ($assetType === 'styles') ? 'wpacu_options_styles' : 'wpacu_options_scripts';
-	        if ( isset( $_POST[$postKey] ) && ! empty( $_POST[$postKey] ) ) {
+
+	        if ( ! empty( $_POST[$postKey] ) ) {
 		        foreach ( $_POST[$postKey] as $wpacuHandle ) {
 			        // Do not append it if the global unload is removed
 			        if ( isset( $_POST[$optionsKey][ $wpacuHandle ] )
@@ -686,7 +696,7 @@ SQL;
 	    // From v1.2.0.5
         if (isset($_POST[$referenceKey]['styles']) || isset($_POST[$referenceKey]['scripts'])) {
             foreach (array('styles', 'scripts') as $assetType) {
-	            if ( isset( $_POST[ $referenceKey ][$assetType] ) && ! empty( $_POST[ $referenceKey ][$assetType] ) ) {
+	            if ( ! empty( $_POST[ $referenceKey ][$assetType] ) ) {
 		            foreach ( $_POST[ $referenceKey ][$assetType] as $assetHandle => $values ) {
 			            $assetValue = isset( $values['load_it_post_type'] ) && $values['load_it_post_type'] ? $values['load_it_post_type'] : ''; // '1' or ''
 			            $loadExceptions[$assetType][ $assetHandle ] = $assetValue;
@@ -697,7 +707,7 @@ SQL;
 	        // Prior to v1.2.0.5
 	        foreach (array('styles', 'scripts') as $assetType) {
 	            $indexKey = 'wpacu_'.$assetType.'_load_it_post_type';
-		        if ( isset( $_POST[$indexKey] ) && ! empty( $_POST[$indexKey] ) ) {
+		        if ( ! empty( $_POST[$indexKey] ) ) {
 			        $wpacuPostType = key( $_POST[$indexKey] );
 			        $loadExceptions[$assetType] = $_POST[$indexKey][ $wpacuPostType ];
 		        }
@@ -790,7 +800,7 @@ SQL;
 	    $existingList = $existingListData['list'];
 
 	    foreach (array('styles', 'scripts') as $assetType) {
-		    if ( isset( $_POST[ $referenceKey ][$assetType] ) && ! empty( $_POST[ $referenceKey ][$assetType] ) ) {
+		    if ( ! empty( $_POST[ $referenceKey ][$assetType] ) ) {
 			    foreach ( array_keys( $_POST[ $referenceKey ][$assetType] ) as $assetHandle ) {
 			        // The checkbox was ticked (it's not empty)
 				    $isSelected = isset( $_POST[$formTargetKey][$assetType][ $assetHandle ] ) && $_POST[$formTargetKey][$assetType][ $assetHandle ];
@@ -926,7 +936,9 @@ SQL;
 	 * @param string $checkType
 	 *
 	 * @return bool
-	 */
+     *
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public function removeEverywhereUnloads($stylesList = array(), $scriptsList = array(), $checkType = '')
     {
     	if ($checkType === 'post') {
@@ -962,7 +974,7 @@ SQL;
 
         $existingList = json_decode($existingListJson, true);
 
-        if (Misc::jsonLastError() === JSON_ERROR_NONE) {
+        if (wpacuJsonLastError() === JSON_ERROR_NONE) {
             foreach (array('styles', 'scripts') as $assetType) {
                 if ($assetType === 'styles') {
                     $list = $removeStylesList;
@@ -1064,8 +1076,11 @@ SQL;
 
     /**
      * Lite Version: For post, pages, custom post types
+     *
      * @param mixed $postType
+     *
      * @return bool
+     * @noinspection NestedAssignmentsUsageInspection
      */
     public function removeBulkUnloads($postType = '')
     {
@@ -1083,8 +1098,8 @@ SQL;
 
 	    $bulkType = 'post_type';
 
-	    $stylesList = Misc::getVar('post', 'wpacu_options_'.$bulkType.'_styles', array());
-	    $scriptsList = Misc::getVar('post', 'wpacu_options_'.$bulkType.'_scripts', array());
+        $stylesList = Misc::getVar('post', 'wpacu_options_'.$bulkType.'_styles', array());
+        $scriptsList = Misc::getVar('post', 'wpacu_options_'.$bulkType.'_scripts', array());
 
         if (empty($stylesList) && empty($scriptsList)) {
         	return false;
@@ -1118,7 +1133,7 @@ SQL;
 
         $existingList = json_decode($existingListJson, true);
 
-        if (Misc::jsonLastError() === JSON_ERROR_NONE) {
+        if (wpacuJsonLastError() === JSON_ERROR_NONE) {
             $list = array();
 
             foreach (array('styles', 'scripts') as $assetType) {
@@ -1132,12 +1147,12 @@ SQL;
                     continue;
                 }
 
-	            foreach ( $existingList[ $assetType ][ $bulkType ][ $postType ] as $handleKey => $handle ) {
-		            if ( in_array( $handle, $list ) ) {
-			            unset( $existingList[ $assetType ][ $bulkType ][ $postType ][ $handleKey ] );
-			            $isUpdated = true;
-		            }
-	            }
+                foreach ($existingList[$assetType][$bulkType][$value] as $handleKey => $handle) {
+                    if (in_array($handle, $list)) {
+                        unset($existingList[$assetType][$bulkType][$value][$handleKey]);
+                        $isUpdated = true;
+                    }
+                }
             }
 
 	        Misc::addUpdateOption(WPACU_PLUGIN_ID . '_bulk_unload', wp_json_encode(Misc::filterList($existingList)));
@@ -1145,6 +1160,81 @@ SQL;
 
         return $isUpdated;
     }
+
+	/**
+	 *
+	 */
+	public static function updatePreloads()
+	{
+		$useGlobalPost = false;
+
+		if ( ( ! empty($_POST[WPACU_FORM_ASSETS_POST_KEY]['styles']) ) || ( ! empty($_POST[WPACU_FORM_ASSETS_POST_KEY]['scripts']) ) ) {
+			$mainVarToUse = self::updatePreloadsAdapt($_POST[WPACU_FORM_ASSETS_POST_KEY]); // New form fields (starting from v1.1.9.9)
+		} elseif (Misc::isValidRequest('post', 'wpacu_preloads')) {
+			$useGlobalPost = true;
+		} else {
+			return;
+		}
+
+		if (! $useGlobalPost && isset($mainVarToUse['wpacu_preloads'])) {
+			$bucketToUse = $mainVarToUse['wpacu_preloads'];
+		} elseif (isset($_POST['wpacu_preloads'])) {
+			$bucketToUse = $_POST['wpacu_preloads'];
+		}
+
+		if (! isset($bucketToUse['styles']) && ! isset($bucketToUse['scripts'])) {
+			return;
+		}
+
+		$optionToUpdate = WPACU_PLUGIN_ID . '_global_data';
+		$globalKey = 'preloads';
+
+		$existingListEmpty = array('styles' => array($globalKey => array()), 'scripts' => array($globalKey => array()));
+		$existingListJson = get_option($optionToUpdate);
+
+		$existingListData = Main::instance()->existingList($existingListJson, $existingListEmpty);
+		$existingList = $existingListData['list'];
+
+		foreach (array('styles', 'scripts') as $assetType) {
+			if ( ! empty( $bucketToUse[$assetType] ) ) {
+				foreach ( $bucketToUse[$assetType] as $assetHandle => $assetPreload ) {
+					$assetPreload = trim( $assetPreload );
+
+					if ( $assetPreload === '' && isset( $existingList[$assetType][ $globalKey ][ $assetHandle ] ) ) {
+						unset( $existingList[$assetType][ $globalKey ][ $assetHandle ] );
+					} elseif ( $assetPreload !== '' ) {
+						$existingList[$assetType][ $globalKey ][ $assetHandle ] = $assetPreload;
+					}
+				}
+			}
+		}
+
+		Misc::addUpdateOption($optionToUpdate, wp_json_encode(Misc::filterList($existingList)));
+	}
+
+	/**
+	 * @param $mainFormArray
+	 *
+	 * @return array
+	 */
+	public static function updatePreloadsAdapt($mainFormArray)
+	{
+		$wpacuPreloadsList = array();
+
+		foreach (array('styles', 'scripts') as $assetKey) {
+			if ( ! empty($mainFormArray[$assetKey]) ) {
+				foreach ($mainFormArray[$assetKey] as $assetHandle => $assetData) {
+					$wpacuPreloadsList['wpacu_preloads'][$assetKey][$assetHandle] = ''; // default
+
+					if (isset($assetData['preload']) && $assetData['preload']) {
+						$wpacuPreloadsList['wpacu_preloads'][ $assetKey ][ $assetHandle ] = $assetData['preload']; // 'basic' or 'async'
+					}
+				}
+			}
+		}
+
+		return $wpacuPreloadsList;
+	}
 
 	/**
 	 *
@@ -1169,7 +1259,7 @@ SQL;
 	    $existingList = $existingListData['list'];
 
 	    foreach (array('styles', 'scripts') as $assetType) {
-		    if ( isset( $_POST['wpacu_handle_notes'][$assetType] ) && ! empty( $_POST['wpacu_handle_notes'][$assetType] ) ) {
+		    if ( ! empty( $_POST['wpacu_handle_notes'][$assetType] ) ) {
 			    foreach ( $_POST['wpacu_handle_notes'][$assetType] as $assetHandle => $assetNote ) {
 				    $assetNote = stripslashes( $assetNote );
 
@@ -1195,8 +1285,7 @@ SQL;
 		$useGlobalPost = false;
 
 		if (empty($mainVarToUse)) {
-		    if ( (isset($_POST[WPACU_FORM_ASSETS_POST_KEY]['styles']) && ! empty($_POST[WPACU_FORM_ASSETS_POST_KEY]['styles']))
-                || (isset($_POST[WPACU_FORM_ASSETS_POST_KEY]['scripts']) && ! empty($_POST[WPACU_FORM_ASSETS_POST_KEY]['scripts'])) ) {
+		    if ( ( ! empty($_POST[WPACU_FORM_ASSETS_POST_KEY]['styles']) ) || ( ! empty($_POST[WPACU_FORM_ASSETS_POST_KEY]['scripts']) ) ) {
 			    $mainVarToUse = self::updateIgnoreChildAdapt($_POST[WPACU_FORM_ASSETS_POST_KEY]); // New form fields (starting from v1.1.9.9)
 		    } elseif (Misc::isValidRequest('post', 'wpacu_ignore_child')) {
 			    $useGlobalPost = true;
@@ -1207,7 +1296,7 @@ SQL;
 
 		if (! $useGlobalPost && isset($mainVarToUse['wpacu_ignore_child'])) {
 			$bucketToUse = $mainVarToUse['wpacu_ignore_child'];
-		} else if (isset($_POST['wpacu_ignore_child'])) {
+		} elseif (isset($_POST['wpacu_ignore_child'])) {
 			$bucketToUse = $_POST['wpacu_ignore_child'];
 		}
 
@@ -1225,7 +1314,7 @@ SQL;
 		$existingList = $existingListData['list'];
 
 		foreach (array('styles','scripts') as $assetType) {
-			if ( isset( $bucketToUse[$assetType] ) && ! empty( $bucketToUse[$assetType] ) ) {
+			if ( ! empty( $bucketToUse[$assetType] ) ) {
 				foreach ( $bucketToUse[$assetType] as $assetHandle => $assetVal ) {
 					$assetVal = trim( $assetVal );
 
@@ -1251,7 +1340,7 @@ SQL;
 	    $wpacuIgnoreChildList = array();
 
         foreach (array('styles', 'scripts') as $assetKey) {
-            if (isset($mainFormArray[$assetKey]) && ! empty($mainFormArray[$assetKey])) {
+            if ( ! empty($mainFormArray[$assetKey]) ) {
                 foreach ($mainFormArray[$assetKey] as $assetHandle => $assetData) {
 	                $wpacuIgnoreChildList['wpacu_ignore_child'][$assetKey][$assetHandle] = ''; // default
 
@@ -1333,52 +1422,26 @@ SQL;
 		$existingList = $existingListData['list'];
 
 		// $assetKey could be 'styles' or 'scripts'
-		foreach ($assetList as $assetKey => $assetDataHandleList) {
-			if (empty($assetDataHandleList) || ! in_array($assetKey, array('styles', 'scripts'))) {
+		foreach ($assetList as $assetType => $assetDataHandleList) {
+			if (empty($assetDataHandleList) || ! in_array($assetType, array('styles', 'scripts'))) {
 				continue;
 			}
 
 			foreach ($assetDataHandleList as $assetObj) {
 				$assetArray = (array)$assetObj;
-				$assetHandle = $assetArray['handle'];
+
+                $handleMaybeAliases = Main::maybeAssignUniqueHandleName($assetArray['handle'], 'scripts');
+				$assetHandle = $handleMaybeAliases['handle_ref'];
 
 				// Strip other unused information including the 'handle' (no need to have it twice as it's already in one of the array's keys)
 				unset( $assetArray['handle'], $assetArray['textdomain'], $assetArray['translations_path'] );
 
 				// Some handles don't have a "src" value such as "woocommerce-inline"
 				if (isset($assetArray['src']) && $assetArray['src']) {
-					$assetArray['src'] = Misc::assetFromHrefToRelativeUri( $assetArray['src'], $assetKey );
+					$assetArray['src'] = Misc::assetFromHrefToRelativeUri( $assetArray['src'], $assetType );
 				}
 
-				// [wpacu_pro]
-				if (isset($assetArray['output'])) { // hardcoded assets have an 'output' value
-					// Is there already an entry for the same handle with a value set for 'output' and 'output_min'
-					if (isset($existingList[$assetKey][$globalKey][$assetHandle]['output'], $existingList[$assetKey][$globalKey][$assetHandle]['output_min'])) {
-						// Save resources: do not update the same values and skip the minification (good to avoid large inline content)
-						continue;
-					}
-
-					if ( ! isset( $assetArray['output_min'] ) ) {
-						$assetArray['output_min'] = '';
-
-						// Reference: $wpacuHardcodedInfoToStoreAfterSubmit from _assets-hardcoded-list.php
-						if ( strpos( $assetHandle, 'wpacu_hardcoded_script_' ) === 0 ) {
-							$outputMin = \WpAssetCleanUp\OptimiseAssets\MinifyJs::applyMinification( $assetArray['output'] );
-							if ( $assetArray['output'] !== $outputMin ) {
-								$assetArray['output_min'] = $outputMin;
-							}
-						} elseif ( ( strpos( $assetHandle, 'wpacu_hardcoded_link_' ) === 0 )
-                                   || ( strpos( $assetHandle, 'wpacu_hardcoded_style_' ) === 0 ) ) {
-							$outputMin = \WpAssetCleanUp\OptimiseAssets\MinifyCss::applyMinification( $assetArray['output'] );
-							if ( $assetArray['output'] !== $outputMin ) {
-								$assetArray['output_min'] = $outputMin;
-							}
-						}
-					}
-				}
-				// [/wpacu_pro]
-
-				$existingList[$assetKey][$globalKey][$assetHandle] = $assetArray;
+                $existingList[$assetType][$globalKey][$assetHandle] = $assetArray;
 			}
 		}
 

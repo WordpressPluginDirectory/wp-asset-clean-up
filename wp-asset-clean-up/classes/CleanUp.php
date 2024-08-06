@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
@@ -14,7 +16,7 @@ class CleanUp
 	 */
 	public function init()
 	{
-		// Is "Test Mode" is enabled and the page is viewed by a regular visitor (not administrator with plugin activation privileges)?
+		// "Test Mode" is enabled and the page is viewed by a regular visitor (not administrator with plugin activation privileges)
 		// Stop here as the script will NOT PREVENT any of the elements below to load
 		// They will load as they used to for the regular visitor while the admin debugs the website
 		add_action('init', array($this, 'doClean'), 12);
@@ -25,11 +27,11 @@ class CleanUp
 	 */
 	public function doClean()
 	{
-		if ( ! method_exists( '\WpAssetCleanUp\Plugin', 'preventAnyFrontendOptimization' ) ) {
-			return; // something's funny as, for some reason, on very rare occasions, the class is not found, so don't continue
+		if ( ! method_exists( '\WpAssetCleanUp\OptimiseAssets\OptimizeCommon', 'preventAnyFrontendOptimization' ) ) {
+			return; // something's funny; for some reason, on very rare occasions, the class is not found, so don't continue
 		}
 
-		if ( (defined('WPACU_ALLOW_ONLY_UNLOAD_RULES') && WPACU_ALLOW_ONLY_UNLOAD_RULES) || Main::instance()->preventAssetsSettings() || Plugin::preventAnyFrontendOptimization() ) {
+		if (wpacuIsDefinedConstant('WPACU_ALLOW_ONLY_UNLOAD_RULES') || OptimizeCommon::preventAnyFrontendOptimization() || Main::instance()->preventAssetsSettings() ) {
 			return;
 		}
 
@@ -39,12 +41,6 @@ class CleanUp
 		if ($settings['remove_rsd_link'] == 1 || $settings['disable_xmlrpc'] === 'disable_all') {
 			// <link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://yourwebsite.com/xmlrpc.php?rsd" />
 			remove_action('wp_head', 'rsd_link');
-		}
-
-		// Remove "Windows Live Writer" link?
-		if ($settings['remove_wlw_link'] == 1) {
-			// <link rel="wlwmanifest" type="application/wlwmanifest+xml" href="http://yourwebsite.com/wp-includes/wlwmanifest.xml">
-			remove_action('wp_head', 'wlwmanifest_link');
 		}
 
 		// Remove "REST API" link?
@@ -66,20 +62,32 @@ class CleanUp
 			remove_action('template_redirect', 'wp_shortlink_header', 11);
 		}
 
-		// Remove "Post's Relational Links"?
-		if ($settings['remove_posts_rel_links'] == 1) {
-			// <link rel='prev' title='Title of adjacent post' href='https://yourdomain.com/adjacent-post-slug-here/' />
-			remove_action('wp_head', 'adjacent_posts_rel_link_wp_head');
-		}
-
 		// Remove "WordPress version" tag?
-		if ($settings['remove_wp_version']) {
+		if ($settings['remove_wp_version'] || $settings['remove_generator_tag']) {
 			// <meta name="generator" content="WordPress 4.9.8" />
 			remove_action('wp_head', 'wp_generator');
 
 			// also hide it from RSS
 			add_filter('the_generator', '__return_false');
 		}
+
+        // Remove all generator tags?
+        // Another function will trigger later that will scan the HTML source, but it's slower
+        // and if, for instance, the meta "generator" will be removed here, then this will process faster
+        // and save some resources (the HTML source is not scanned anymore)
+        if ($settings['remove_generator_tag']) {
+            // WPML Multilingual CMS
+            if (defined('ICL_SITEPRESS_VERSION')) {
+                global $sitepress;
+
+                if ( ! empty($sitepress) && method_exists($sitepress, 'meta_generator_tag')) {
+                    remove_action('wp_head', array($sitepress, 'meta_generator_tag'));
+                }
+            }
+
+            // Give - Donation Plugin
+            remove_action( 'wp_head', 'give_version_in_header' );
+        }
 
 		if ($settings['disable_rss_feed']) {
 			$this->doDisableRssFeed();
@@ -106,6 +114,24 @@ class CleanUp
 				add_filter('xmlrpc_enabled', '__return_false');
 			}
 		}
+
+        /*
+         * [START] DEPRECATED
+         */
+            // Remove "Post's Relational Links"?
+            if ($settings['remove_posts_rel_links'] == 1) {
+                // <link rel='prev' title='Title of adjacent post' href='https://yourdomain.com/adjacent-post-slug-here/' />
+                remove_action('wp_head', 'adjacent_posts_rel_link_wp_head');
+            }
+
+            // Remove "Windows Live Writer" link?
+            if ($settings['remove_wlw_link'] == 1) {
+                // <link rel="wlwmanifest" type="application/wlwmanifest+xml" href="http://yourwebsite.com/wp-includes/wlwmanifest.xml">
+                remove_action('wp_head', 'wlwmanifest_link');
+            }
+        /*
+         * [END] DEPRECATED
+         */
 	}
 
 	/**
@@ -153,12 +179,41 @@ class CleanUp
 	 * @param $htmlSource
 	 *
 	 * @return mixed
-	 */
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public static function removeMetaGenerators($htmlSource)
 	{
+        if ( ! preg_match('#name(\s+|)=(\s+|)("|\'|)generator("|\'|)#Umi', $htmlSource) ) {
+            return $htmlSource;
+        }
+
+        // Are there any meta-generator tags already cached? use these as it's faster than traversing the DOM
+        $allCachedMetaGeneratorTags = $metaTagsToStrip = array();
+        $metaGeneratorCacheKey = WPACU_PLUGIN_ID.'_site_meta_generator_tags';
+
+        if ( $metaGeneratorTagsJsonEncoded = get_transient($metaGeneratorCacheKey) ) {
+            $metaGeneratorTags = @json_decode( $metaGeneratorTagsJsonEncoded, true );
+
+            if ( ! empty($metaGeneratorTags) && wpacuJsonLastError() === JSON_ERROR_NONE ) {
+                $allCachedMetaGeneratorTags = $metaGeneratorTags;
+
+                foreach ( $metaGeneratorTags as $metaGeneratorTag ) {
+                    $metaTagsToStrip[$metaGeneratorTag] = '';
+                }
+
+                $htmlSource = strtr($htmlSource, $metaTagsToStrip);
+
+                if ( ! preg_match('#name(\s+|)=(\s+|)("|\'|)generator("|\'|)#Umi', $htmlSource) ) {
+                    // All good! The tags were stripped
+                    // Otherwise, fetch the DOM, and make sure they are all stripped
+                    return $htmlSource;
+                }
+            }
+        }
+
 		$fetchMethod = 'dom'; // 'regex' or 'dom'
 
-		if ( $fetchMethod === 'dom' && Misc::isDOMDocumentOn() && $htmlSource ) {
+		if ( $fetchMethod === 'dom' && $htmlSource && Misc::isDOMDocumentOn() ) {
 			$domTag = OptimizeCommon::getDomLoadedTag($htmlSource, 'removeMetaGenerators');
 
 			$metaTagsToStrip = array();
@@ -170,7 +225,7 @@ class CleanUp
 					$outerTag = $outerTagRegExp = trim( Misc::getOuterHTML( $tagObject ) );
 
 					// As DOMDocument doesn't retrieve the exact string, some alterations to the RegEx have to be made
-					// Leave no room for errors as all sort of characters can be within the "content" attribute
+					// Leave no room for errors as all sorts of characters can be within the "content" attribute
 					$last2Chars = substr( $outerTag, - 2 );
 
 					if ( $last2Chars === '">' || $last2Chars === "'>" ) {
@@ -186,31 +241,44 @@ class CleanUp
 
 					if ( strpos( $outerTagRegExp, '<meta' ) !== false ) {
 						$outerTagRegExp = str_replace('#', '\#', $outerTagRegExp);
-						preg_match_all( '#' . $outerTagRegExp . '#si', $htmlSource, $matches );
+                        $outerTagRegExp = str_replace('\\\\#', '\#', $outerTagRegExp);
 
-						if ( isset( $matches[0][0] ) && ! empty( $matches[0][0] ) && strip_tags( $matches[0][0] ) === '' ) {
+                        preg_match_all( '#' . $outerTagRegExp . '#si', $htmlSource, $matches );
+
+						if ( ! empty( $matches[0][0] ) && strip_tags( $matches[0][0] ) === '' ) {
 							$metaTagsToStrip[$matches[0][0]] = '';
 						}
 					}
 				}
 			}
 
-			$htmlSource = strtr($htmlSource, $metaTagsToStrip);
-
 			libxml_clear_errors();
 		}
 
-		/* [wpacu_timing] */ Misc::scriptExecTimer( 'alter_html_source_for_remove_meta_generators', 'end' ); /* [/wpacu_timing] */
+        if ( ! empty( $metaTagsToStrip ) ) {
+            $htmlSource = strtr( $htmlSource, $metaTagsToStrip );
+
+            foreach ( array_keys($metaTagsToStrip) as $metaGeneratorTagExtracted ) {
+                if ( ! in_array( $metaGeneratorTagExtracted, $allCachedMetaGeneratorTags ) ) {
+                    $allCachedMetaGeneratorTags[] = $metaGeneratorTagExtracted;
+                }
+            }
+
+            // Cache the meta-generator tags; In some tests, this method performs even 5x faster when caching is used
+            // Set it to refresh every 30 days; This is reasonable when the website changes (e.g. new plugins are activated, a new website structure is used)
+            set_transient( $metaGeneratorCacheKey, wp_json_encode($allCachedMetaGeneratorTags), 3600 * 24 * 30 );
+        }
+
 		return $htmlSource;
 	}
 
 	/**
-	 * @param $htmlSource
-	 * @param bool $ignoreExceptions
-	 * @param $for
+	 * @param string $htmlSource
+	 * @param bool $ignoreExceptions - this is related to "Do not remove comments containing the following (case-insensitive) text" from "Strip HTML comments?" area
 	 *
 	 * @return string|string[]
-	 */
+     * @noinspection ParameterDefaultValueIsNotNullInspection
+     */
 	public static function removeHtmlComments($htmlSource, $ignoreExceptions = false)
 	{
 		if ( strpos($htmlSource, '<!--') === false || ! Misc::isDOMDocumentOn() ) {
@@ -219,16 +287,16 @@ class CleanUp
 
 		$domTag = OptimizeCommon::getDomLoadedTag($htmlSource, 'removeHtmlComments');
 
-		if (! $domTag) {
-			return $htmlSource;
-		}
+        if ( ! $domTag ) {
+            return $htmlSource;
+        }
 
-		$xpathComments = new \DOMXPath($domTag);
-		$comments = $xpathComments->query('//comment()');
+        $xpathComments = new \DOMXPath($domTag);
+        $comments      = $xpathComments->query('//comment()');
 
-		libxml_clear_errors();
+        libxml_clear_errors();
 
-		if ($comments === null) {
+        if ( $comments === null ) {
 			return $htmlSource;
 		}
 
@@ -242,7 +310,7 @@ class CleanUp
 		if (isset($matchesRegExpComments[1]) && count($matchesRegExpComments[1]) !== count($comments)) {
 			preg_match_all('#=(|\s+)([\'"])(|\s+)<!--(.*?)-->(|\s+)([\'"])#s', $htmlSource, $matchesCommentsWithinQuotes);
 
-			if (isset($matchesCommentsWithinQuotes[0]) && ! empty($matchesCommentsWithinQuotes[0])) {
+			if ( ! empty($matchesCommentsWithinQuotes[0]) ) {
 				foreach ($matchesCommentsWithinQuotes[0] as $matchedDataOriginal) {
 					$matchedDataUpdated = str_replace(
 						array('', '<!--', '-->'),
@@ -265,57 +333,57 @@ class CleanUp
 		foreach ($comments as $comment) {
 			$entireComment = '<!--' . $comment->nodeValue . '-->';
 
-			// Do not strip MSIE conditional comments
-			if ( strpos( $entireComment, '<!--<![endif]-->' ) !== false ||
-			     preg_match( '#<!--\[if(.*?)]>(.*?)<!-->#si', $entireComment ) ||
-			     preg_match( '#<!--\[if(.*?)\[endif]-->#si', $entireComment ) ) {
-				continue;
-			}
+            // Do not strip MSIE conditional comments
+            if ( strpos( $entireComment, '<!--<![endif]-->' ) !== false ||
+                 preg_match( '#<!--\[if(.*?)]>(.*?)<!-->#si', $entireComment ) ||
+                 preg_match( '#<!--\[if(.*?)\[endif]-->#si', $entireComment ) ) {
+                continue;
+            }
 
-			// Any exceptions set in "Strip HTML comments?" textarea?
-			// $ignoreExceptions has to be set to false (as it is by default)
-			if (! $ignoreExceptions && Main::instance()->settings['remove_html_comments_exceptions']) {
-				$removeHtmlCommentsExceptions = trim(Main::instance()->settings['remove_html_comments_exceptions']);
+            // Any exceptions set in "Strip HTML comments?" textarea?
+            // $ignoreExceptions has to be set to false (as it is by default)
+            if (! $ignoreExceptions && Main::instance()->settings['remove_html_comments_exceptions']) {
+                $removeHtmlCommentsExceptions = trim(Main::instance()->settings['remove_html_comments_exceptions']);
 
-				if (strpos($removeHtmlCommentsExceptions, "\n") !== false) {
-					foreach (explode("\n", $removeHtmlCommentsExceptions) as $removeCommExceptionPattern) {
-						$removeCommExceptionPattern = trim($removeCommExceptionPattern);
+                if (strpos($removeHtmlCommentsExceptions, "\n") !== false) {
+                    foreach (explode("\n", $removeHtmlCommentsExceptions) as $removeCommExceptionPattern) {
+                        $removeCommExceptionPattern = trim($removeCommExceptionPattern);
 
-						if (stripos($entireComment, $removeCommExceptionPattern) !== false) {
-							continue 2;
-						}
-					}
-				} elseif (stripos($entireComment, $removeHtmlCommentsExceptions) !== false) {
-					continue;
-				}
-			}
+                        if (stripos($entireComment, $removeCommExceptionPattern) !== false) {
+                            continue 2;
+                        }
+                    }
+                } elseif (stripos($entireComment, $removeHtmlCommentsExceptions) !== false) {
+                    continue;
+                }
+            }
 
-			if (strlen($entireComment) < 200) {
-				$stripCommentsList[ $entireComment ] = '';
-			} else {
-				$htmlSource = str_replace($entireComment, '', $htmlSource);
-			}
-		}
+            if (strlen($entireComment) < 200) {
+                $stripCommentsList[ $entireComment ] = '';
+            } else {
+                $htmlSource = str_replace($entireComment, '', $htmlSource);
+            }
+        }
 
-		if (! empty($stripCommentsList)) {
-			$htmlSource = strtr( $htmlSource, $stripCommentsList );
-		}
+        if (! empty($stripCommentsList)) {
+            $htmlSource = strtr( $htmlSource, $stripCommentsList );
+        }
 
-		if (! empty($commentsWithinQuotes)) {
-			foreach ($commentsWithinQuotes as $commentQuote) {
-				$htmlSource = str_replace($commentQuote['updated'], $commentQuote['original'], $htmlSource);
-			}
-		}
+        if (! empty($commentsWithinQuotes)) {
+            foreach ($commentsWithinQuotes as $commentQuote) {
+                $htmlSource = str_replace($commentQuote['updated'], $commentQuote['original'], $htmlSource);
+            }
+        }
 
-		return $htmlSource;
-	}
+        return $htmlSource;
+    }
 
-	/**
-	 * @param $strContains
-	 * @param $htmlSource
-	 *
-	 * @return mixed
-	 */
+    /**
+     * @param $strContains
+     * @param $htmlSource
+     *
+     * @return mixed
+     */
 	public static function cleanLinkTagFromHtmlSource($strContains, $htmlSource)
 	{
 		if (! is_array($strContains)) {
@@ -347,7 +415,7 @@ class CleanUp
 
 			$linkTag = $matchesFromTag[0];
 
-			if (stripos($linkTag, '<link') === 0 && substr($linkTag, -1) === '>' && strip_tags($linkTag) === '') {
+			if (strncasecmp($linkTag, '<link', 5) === 0 && substr($linkTag, -1) === '>' && strip_tags($linkTag) === '') {
 				$htmlSource = str_replace($linkTag, '', $htmlSource);
 			}
 		}
@@ -500,7 +568,8 @@ class CleanUp
 
 	/**
 	 *
-	 */
+     * @noinspection PhpUnusedParameterInspection
+     */
 	public function cleanUpHtmlOutputForAssetsCall()
 	{
 		if (isset($_GET['wpacu_clean_load'])) {
@@ -509,13 +578,12 @@ class CleanUp
 		}
 
 		// No Autoptimize
-		if (! defined('AUTOPTIMIZE_NOBUFFER_OPTIMIZE')) {
-			define( 'AUTOPTIMIZE_NOBUFFER_OPTIMIZE', true );
-		}
+        wpacuDefineConstant( 'AUTOPTIMIZE_NOBUFFER_OPTIMIZE' );
+
 		add_filter('autoptimize_filter_noptimize', '__return_false');
 
-		// Use less resources during CSS/JS fetching by preventing other plugins to interfere with the HTML output as it's completely unnecessary in this instance
-		if (Misc::isPluginActive('autoptimize/autoptimize.php')) {
+		// Use fewer resources during CSS/JS fetching by preventing other plugins to interfere with the HTML output as it's completely unnecessary in this instance
+		if (wpacuIsPluginActive('autoptimize/autoptimize.php')) {
 			foreach (array('autoptimize_html', 'autoptimize_css', 'autoptimize_js', 'autoptimize_cdn_url', 'autoptimize_optimize_logged') as $aoOption) {
 				add_filter('pre_option_'.$aoOption, static function($value) { return ''; });
 			}
@@ -540,7 +608,8 @@ class CleanUp
 		self::filterSGOptions();
 
 		// Emulate page builder param to view page with no SG Optimiser on request
-		// Extra params to be used in case 'SG Optimiser' is called before Asset CleanUp: 'fl_builder', 'vcv-action', 'et_fb', 'ct_builder', 'tve'
+		// Extra params to be used in case 'SG Optimiser' is called before Asset CleanUp:
+        // 'fl_builder', 'vcv-action', 'et_fb', 'ct_builder', 'tve'
 		add_filter('sgo_pb_params', static function($pbParams) {
 			$pbParams[] = WPACU_LOAD_ASSETS_REQ_KEY; // fetching assets
 			$pbParams[] = 'wpacu_clean_load'; // loading the page unoptimized for debugging purposes
@@ -604,7 +673,7 @@ class CleanUp
 
 		$allCssHandles = array();
 
-		if (isset($wp_styles->registered) && ! empty($wp_styles->registered)) {
+		if ( ! empty($wp_styles->registered) ) {
 			$allCssHandles = array_keys($wp_styles->registered);
 		}
 
@@ -620,7 +689,7 @@ class CleanUp
 
 		$allJsHandles = array();
 
-		if (isset($wp_scripts->registered) && ! empty($wp_scripts->registered)) {
+		if ( ! empty($wp_scripts->registered) ) {
 			$allJsHandles = array_keys($wp_scripts->registered);
 		}
 

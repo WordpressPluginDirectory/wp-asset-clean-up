@@ -2,7 +2,7 @@
 /*
  * Plugin Name: Asset CleanUp: Page Speed Booster
  * Plugin URI: https://wordpress.org/plugins/wp-asset-clean-up/
- * Version: 1.3.9.3
+ * Version: 1.3.9.4
  * Requires at least: 4.5
  * Requires PHP: 5.6
  * Description: Unload Chosen Scripts & Styles from Posts/Pages to reduce HTTP Requests, Combine/Minify CSS/JS files
@@ -29,7 +29,7 @@ if ( (defined('WPACU_PRO_NO_LITE_NEEDED') && WPACU_PRO_NO_LITE_NEEDED !== false 
 
 // Is the Pro version triggered before the Lite one and are both plugins active?
 if (! defined('WPACU_PLUGIN_VERSION')) {
-	define('WPACU_PLUGIN_VERSION', '1.3.9.3');
+	define('WPACU_PLUGIN_VERSION', '1.3.9.4');
 }
 
 // Exit if accessed directly
@@ -57,13 +57,10 @@ define('WPACU_PLUGIN_BASE',         plugin_basename(WPACU_PLUGIN_FILE));
 define('WPACU_ADMIN_PAGE_ID_START', WPACU_PLUGIN_ID . '_getting_started');
 
 // Do not load the plugin if the PHP version is below 5.6
-// If PHP_VERSION_ID is not defined, then PHP version is below 5.2.7, thus the plugin is not usable
-
+// If PHP_VERSION_ID is not defined, then the PHP version is below 5.2.7, thus the plugin is not usable
 $wpacuWrongPhp = ((! defined('PHP_VERSION_ID')) || (defined('PHP_VERSION_ID') && PHP_VERSION_ID < 50600));
 
-if (! defined('WPACU_WRONG_PHP_VERSION')) {
-	define( 'WPACU_WRONG_PHP_VERSION', ( ( $wpacuWrongPhp ) ? 'true' : 'false' ) );
-}
+wpacuDefineConstant( 'WPACU_WRONG_PHP_VERSION', ( ( $wpacuWrongPhp ) ? 'true' : 'false' ) );
 
 if ($wpacuWrongPhp && is_admin()) { // Dashboard
     add_action('admin_notices', function() {
@@ -91,9 +88,9 @@ if ($wpacuWrongPhp && is_admin()) { // Dashboard
     return;
 }
 
-define('WPACU_PLUGIN_DIR',          __DIR__);
-define('WPACU_PLUGIN_CLASSES_PATH', WPACU_PLUGIN_DIR.'/classes/');
-define('WPACU_PLUGIN_URL',          plugins_url('', WPACU_PLUGIN_FILE));
+define('WPACU_PLUGIN_DIR',                  __DIR__);
+define('WPACU_PLUGIN_CLASSES_PATH',         WPACU_PLUGIN_DIR.'/classes/');
+define('WPACU_PLUGIN_URL',                  plugins_url('', WPACU_PLUGIN_FILE));
 
 // Upgrade to Pro Sales Page
 define('WPACU_PLUGIN_GO_PRO_URL',   'https://www.gabelivan.com/items/wp-asset-cleanup-pro/'); // no query strings to be added
@@ -108,7 +105,19 @@ define('WPACU_GET_LOADED_ASSETS_ACTION', $wpacuGetLoadedAssetsAction);
 
 require_once WPACU_PLUGIN_DIR.'/wpacu-load.php';
 
-if (WPACU_GET_LOADED_ASSETS_ACTION === true || ! is_admin()) {
+$isDashboardManageAssets    = isset( $_GET['page'] ) && ( $_GET['page'] === WPACU_PLUGIN_ID . '_assets_manager' );
+$isDashboardCriticalCssPage = isset( $_GET['wpacu_sub_page'] ) && ( $_GET['wpacu_sub_page'] === 'manage_critical_css' );
+$isDashboardPluginsPage     = isset( $_GET['wpacu_sub_page'] ) && ( strpos( $_GET['wpacu_sub_page'], 'manage_plugins_' ) === 0 );
+
+// In which situations should the composer libraries be loaded?
+// Only load them when necessary
+$wpacuIsWpacuAjaxRequest = ( ! empty( $_SERVER['HTTP_X_REQUESTED_WITH'] ) && strtolower( $_SERVER['HTTP_X_REQUESTED_WITH'] ) === 'xmlhttprequest' )
+	&& ( strpos( $_SERVER['REQUEST_URI'], 'admin-ajax.php' ) !== false ) // The request URI contains 'admin-ajax.php'
+	&& isset ($_POST['action']) && $_POST['action'] && strpos($_POST['action'], WPACU_PLUGIN_ID.'_') === 0;
+
+if (WPACU_GET_LOADED_ASSETS_ACTION === true ||
+    ! is_admin() ||
+    (is_admin() && ($wpacuIsWpacuAjaxRequest || $isDashboardManageAssets || $isDashboardCriticalCssPage || $isDashboardPluginsPage))) {
 	add_action('init', static function() {
 		// "Smart Slider 3" & "WP Rocket" compatibility fix | triggered ONLY when the assets are fetched
 		if ( ! function_exists('get_rocket_option') && class_exists( 'NextendSmartSliderWPRocket' ) ) {
@@ -119,42 +128,39 @@ if (WPACU_GET_LOADED_ASSETS_ACTION === true || ! is_admin()) {
 	add_action('parse_query', static function() { // very early triggering to set WPACU_ALL_ACTIVE_PLUGINS_LOADED
 		if (defined('WPACU_ALL_ACTIVE_PLUGINS_LOADED')) { return; } // only trigger it once in this action
 		define('WPACU_ALL_ACTIVE_PLUGINS_LOADED', true);
-		\WpAssetCleanUp\Plugin::preventAnyFrontendOptimization('parse_query');
+		\WpAssetCleanUp\OptimiseAssets\OptimizeCommon::preventAnyFrontendOptimization('parse_query');
 	}, 1);
-
-	require_once WPACU_PLUGIN_DIR . '/vendor/autoload.php';
 }
 
 // No plugin changes are needed when a feed is loaded
-add_action('setup_theme', static function() {
-	// Only in the front-end view and when a request URI is there (e.g. not triggering the WP environment via an SSH terminal)
-	if ( ! isset($_SERVER['REQUEST_URI']) || is_admin() ) {
-		return;
-	}
+// Only in the front-end view and when a request URI is there (e.g. not triggering the WP environment via an SSH terminal)
+if ( isset($_SERVER['REQUEST_URI']) && ! is_admin() ) {
+    add_action('setup_theme', static function () {
+        global $wp_rewrite;
 
-	global $wp_rewrite;
+        if (isset($wp_rewrite->feed_base) &&
+            $wp_rewrite->feed_base &&
+            strpos($_SERVER['REQUEST_URI'], '/' . $wp_rewrite->feed_base) !== false) {
+            $currentPageUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . parse_url(site_url(),
+                    PHP_URL_HOST) . $_SERVER['REQUEST_URI'];
 
-	if (isset($wp_rewrite->feed_base) &&
-	    $wp_rewrite->feed_base &&
-	    strpos($_SERVER['REQUEST_URI'], '/'.$wp_rewrite->feed_base) !== false) {
-		$currentPageUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . parse_url(site_url(), PHP_URL_HOST) . $_SERVER['REQUEST_URI'];
+            $cleanCurrentPageUrl = $currentPageUrl;
+            if (strpos($currentPageUrl, '?') !== false) {
+                list($cleanCurrentPageUrl) = explode('?', $currentPageUrl);
+            }
 
-		$cleanCurrentPageUrl = $currentPageUrl;
-		if (strpos($currentPageUrl, '?') !== false) {
-			list($cleanCurrentPageUrl) = explode('?', $currentPageUrl);
-		}
-
-		// /{feed_slug_here}/ or /{feed_slug_here}/atom/
-		if ($cleanCurrentPageUrl === site_url().'/'.$wp_rewrite->feed_base.'/'
-		    || $cleanCurrentPageUrl === site_url().'/'.$wp_rewrite->feed_base.'/atom/') {
-			\WpAssetCleanUp\Plugin::preventAnyFrontendOptimization();
-		}
-	}
-});
+            // /{feed_slug_here}/ or /{feed_slug_here}/atom/
+            if ($cleanCurrentPageUrl === site_url() . '/' . $wp_rewrite->feed_base . '/'
+                || $cleanCurrentPageUrl === site_url() . '/' . $wp_rewrite->feed_base . '/atom/') {
+                \WpAssetCleanUp\OptimiseAssets\OptimizeCommon::preventAnyFrontendOptimization();
+            }
+        }
+    });
+}
 
 // "Transliterator - WordPress Transliteration" breaks the HTML content in Asset CleanUp's admin pages
 // by converting characters such as &lt; (that should stay as they are) to < thus, a fix is attempted to be made here
-if (isset($_GET['page']) && (strpos($_GET['page'], WPACU_PLUGIN_ID.'_') !== false) && is_admin() && method_exists('Serbian_Transliteration_Cache', 'set')) {
+if (isset($_GET['page']) && is_string($_GET['page']) && (strpos($_GET['page'], WPACU_PLUGIN_ID.'_') !== false) && is_admin() && method_exists('Serbian_Transliteration_Cache', 'set')) {
 	Serbian_Transliteration_Cache::set('is_editor', true);
 }
 

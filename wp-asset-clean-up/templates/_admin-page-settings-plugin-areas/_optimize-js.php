@@ -128,16 +128,16 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
         <tr>
             <td colspan="2" style="padding: 0;">
                 <div class="wpacu-combine-notice-default wpacu_hide" style="line-height: 22px; background: #f8f8f8; border-left: 4px solid #008f9c; padding: 10px; margin: 0 0 15px;">
-                    <strong><?php _e('NOTE', 'wp-asset-clean-up'); ?>:</strong> <?php _e('Concatenating assets is no longer a recommended practice in HTTP/2', 'wp-asset-clean-up'); ?>. &nbsp; <a data-id="wpacu-http2-info-js" class="wpacu-http2-info-js-target" href="#wpacu-http2-info-js"><?php _e('Read more', 'wp-asset-clean-up'); ?></a> &nbsp;/&nbsp; <a class="wpacu_verify_http2_protocol" target="_blank" href="https://tools.keycdn.com/http2-test"><strong><?php _e('Verify if the website is delivered through the HTTP/2 network protocol', 'wp-asset-clean-up'); ?></strong></a>
+                    <strong><?php _e('NOTE', 'wp-asset-clean-up'); ?>:</strong> <?php _e('Concatenating assets is no longer a recommended practice in HTTP/2', 'wp-asset-clean-up'); ?>. &nbsp; <a data-wpacu-modal-target="wpacu-http2-info-js-target" href="#wpacu-http2-info-js"><?php _e('Read more', 'wp-asset-clean-up'); ?></a> &nbsp;/&nbsp; <a class="wpacu_verify_http2_protocol" target="_blank" href="https://tools.keycdn.com/http2-test"><strong><?php _e('Verify if the website is delivered through the HTTP/2 network protocol', 'wp-asset-clean-up'); ?></strong></a>
                 </div>
                 <div class="wpacu-combine-notice-http-2-detected wpacu_hide" style="line-height: 22px; background: #f8f8f8; border-left: 4px solid #008f9c; padding: 10px; margin: 0 0 15px;">
-                    <span class="wpacu_http2_protocol_is_supported" style="color: green; font-weight: 400;"><span class="dashicons dashicons-yes-alt"></span> Your website `<span style="font-weight: 500;"><?php echo get_site_url(); ?></span>` is delivered through the HTTP/2 network protocol, thus the website will be as fast without using this feature which might require maintenance once in a while.</span> <a class="wpacu-http2-info-js-target" href="#wpacu-http2-info-js"><?php _e('Read more', 'wp-asset-clean-up'); ?></a>
+                    <span class="wpacu_http2_protocol_is_supported" style="color: green; font-weight: 400;"><span class="dashicons dashicons-yes-alt"></span> Your website `<span style="font-weight: 500;"><?php echo get_site_url(); ?></span>` is delivered through the HTTP/2 network protocol, thus the website will be as fast without using this feature which might require maintenance once in a while.</span> <a data-wpacu-modal-target="wpacu-http2-info-js-target" href="#wpacu-http2-info-js"><?php _e('Read more', 'wp-asset-clean-up'); ?></a>
                 </div>
             </td>
         </tr>
 
         <?php
-        $wpRocketIsEnabledWithDelayJs = (defined('WPACU_WP_ROCKET_DELAY_JS_ENABLED') && WPACU_WP_ROCKET_DELAY_JS_ENABLED);
+        $wpRocketIsEnabledWithDelayJs = wpacuIsDefinedConstant('WPACU_WP_ROCKET_DELAY_JS_ENABLED');
         $combineJsIsDisabled = (! empty($data['is_optimize_js_enabled_by_other_party']) || $wpRocketIsEnabledWithDelayJs);
         ?>
 		<tr valign="top">
@@ -160,7 +160,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
 						   name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[combine_loaded_js]"
 						   value="1" /> <span class="wpacu_slider wpacu_round"></span> </label>
 
-				&nbsp;<small>* if <code style="font-size: inherit;"><?php echo '/'.str_replace(Misc::getWpRootDirPath(), '', WP_CONTENT_DIR) . \WpAssetCleanUp\OptimiseAssets\OptimizeCommon::getRelPathPluginCacheDir(); ?></code> directory is not writable for some reason, this feature will not work; requires the DOMDocument XML DOM Parser to be enabled in PHP (which it is by default) for maximum performance</small>
+                &nbsp;<small>* the individual files will be combined into larger JavaScript files and referenced from <code style="font-size: inherit;"><?php echo '/'.str_replace(dirname(WP_CONTENT_DIR), '', WP_CONTENT_DIR) . OptimizeCommon::getRelPathPluginCacheDir(); ?>js/</code></small>
 
 				<?php
 				if (! empty($data['is_optimize_js_enabled_by_other_party'])) {
@@ -255,10 +255,8 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                         <div style="margin-top: 15px; margin-bottom: 0;"><hr /></div>
                     </div>
 
-					<!--
-                               -->
 					<p style="margin: 8px 0;">
-						<?php _e('This results in as less JS combination groups as possible (this combines all JS files into 2/3 files, keeping their HEAD and BODY locations and most of the inline script tags before them for maximum compatibility)', 'wp-asset-clean-up'); ?> - <span style="color: #0073aa;" class="dashicons dashicons-info"></span> <a id="wpacu-combine-js-method-info-target" href="#wpacu-combine-js-method-info"><?php _e('Read more', 'wp-asset-clean-up'); ?></a>
+						<?php _e('This results in as less JS combination groups as possible (this combines all JS files into 2/3 files, keeping their HEAD and BODY locations and most of the inline script tags before them for maximum compatibility)', 'wp-asset-clean-up'); ?> - <span style="color: #0073aa;" class="dashicons dashicons-info"></span> <a data-wpacu-modal-target="wpacu-combine-js-method-info-target" href="#wpacu-combine-js-method-info"><?php _e('Read more', 'wp-asset-clean-up'); ?></a>
 					</p>
 
 					<hr />
@@ -296,19 +294,21 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
 
         <tr valign="top">
             <th scope="row" class="setting_title">
-                <label for="wpacu_inline_js_files_enable"><?php esc_html_e('Inline JavaScript Files', 'wp-asset-clean-up'); ?>
-                    <a class="go-pro-link-no-style" target="_blank" href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=optimize_js&utm_medium=inline_chosen_js_files'); ?>"><span class="wpacu-tooltip" style="width: 186px;"><?php esc_html_e('This is a feature available in the Pro version! Unlock it!', 'wp-asset-clean-up'); ?></span> <img style="opacity: 0.6;" width="20" height="20" src="<?php echo esc_url(WPACU_PLUGIN_URL.'/assets/icons/icon-lock.svg'); ?>" valign="top" alt="" /></a>
+                <label for="wpacu_inline_js_files_enable">
+                    <?php esc_html_e('Inline JavaScript Files', 'wp-asset-clean-up'); ?>
+                    <!-- [wpacu_lite] -->
+                    <a class="go-pro-link-no-style" target="_blank" href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=optimize_js&utm_medium=inline_chosen_js_files'); ?>"><span class="wpacu-tooltip" style="width: auto; left: -16px;"><?php esc_html_e('This is a feature available in the Pro version! Unlock it!', 'wp-asset-clean-up'); ?></span> <img style="margin: 0; opacity: 0.6;" width="20" height="20" src="<?php echo esc_url(WPACU_PLUGIN_URL.'/assets/icons/icon-lock.svg'); ?>" valign="top" alt="" /></a>
+                    <!-- [/wpacu_lite] -->
                 </label>
                 <p class="wpacu_subtitle"><small><em><?php esc_html_e('This will work for local (same domain) files. External requests tags will not be altered (e.g. cdnjs.cloudflare.com, ajax.googleapis.com etc.).', 'wp-asset-clean-up'); ?></em></small></p>
             </th>
             <td>
-                <label class="wpacu_switch wpacu_disabled"><!-- Disabled: Available only in the Pro version -->
+                <label class="wpacu_switch
+                    wpacu_disabled"><!-- Disabled: Available only in the Pro version -->
                     <input id="wpacu_inline_js_files_enable"
                            data-target-opacity="wpacu_inline_js_files_info_area"
                            type="checkbox"
-                            <?php
-                            echo (($data['inline_js_files'] == 1) ? 'checked="checked"' : '');
-                            ?>
+                            disabled="disabled"
                            name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[inline_js_files]"
                            value="1" /> <span class="wpacu_slider wpacu_round"></span> </label>
 
@@ -326,7 +326,10 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
 			    }
 			    ?>
 
-                <div id="wpacu_inline_js_files_info_area" <?php if (empty($data['is_optimize_css_enabled_by_other_party']) && $data['inline_js_files'] == 1) { ?> style="opacity: 1;" <?php } else { ?>style="opacity: 0.4;"<?php } ?>>
+                <?php
+                $inlineJsFilesTagStyle = 'opacity: 0.4;';
+                ?>
+                <div id="wpacu_inline_js_files_info_area" style="<?php echo $inlineJsFilesTagStyle; ?>">
                     <p class="wpacu-warning" style="margin: 10px 0; font-size: 13px; padding: 4px 9px;">
                         <small><strong style="color: orange;"><span class="dashicons dashicons-warning"></span></strong> Please be extra careful if you decide to use this feature as inlining JavaScript files can be trickier than inlining CSS ones due to the more complex syntax and various attributes that might set to the external JS file such as "async" &amp; "defer" (the content of any JS having this attribute will be wrapped between <code>document.addEventListener('DOMContentLoaded', function() {</code> and <code>});</code>.</small>
                     </p>
@@ -374,7 +377,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                            name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[move_inline_jquery_after_src_tag]"
                            value="1" /> <span class="wpacu_slider wpacu_round"></span> </label>
 
-                &nbsp;<?php _e('Useful in case plugins/themes insert jQuery inline code in the post/page content (e.g. via shortcodes) or inside the HEAD section before jQuery library is called.', 'wp-asset-clean-up'); ?> <span style="color: #0073aa;" class="dashicons dashicons-info"></span> <a id="wpacu-move-inline-jquery-target" href="#wpacu-move-inline-jquery"><?php _e('View Examples', 'wp-asset-clean-up'); ?></a>
+                &nbsp;<?php _e('Useful in case plugins/themes insert jQuery inline code in the post/page content (e.g. via shortcodes) or inside the HEAD section before jQuery library is called.', 'wp-asset-clean-up'); ?> <span style="color: #0073aa;" class="dashicons dashicons-info"></span> <a data-wpacu-modal-target="wpacu-move-inline-jquery-target" href="#wpacu-move-inline-jquery"><?php _e('View Examples', 'wp-asset-clean-up'); ?></a>
 	            <?php
 	            $moveInlineJQueryAfterSrcTagStyle = ($data['move_inline_jquery_after_src_tag'] == 1) ? 'opacity: 1;' : 'opacity: 0.4;';
 	            ?>
@@ -389,26 +392,29 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
             </td>
         </tr>
 
-        <!-- [wpacu_pro] -->
         <tr valign="top">
             <th scope="row" class="setting_title">
-                <label for="wpacu_move_scripts_to_body_enable"><?php echo wp_kses(__('Move All <code>&lt;SCRIPT&gt;</code> tags From HEAD to BODY', 'wp-asset-clean-up'), array('code' => array())); ?> <a class="go-pro-link-no-style" target="_blank" href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=optimize_js&utm_medium=move_scripts_to_body'); ?>"><span class="wpacu-tooltip" style="width: 186px;"><?php esc_html_e('This is a feature available in the Pro version! Unlock it!', 'wp-asset-clean-up'); ?></span> <img style="opacity: 0.6;" width="20" height="20" src="<?php echo esc_url(WPACU_PLUGIN_URL); ?>/assets/icons/icon-lock.svg" valign="top" alt="" /></a></label>
+                <label for="wpacu_move_scripts_to_body_enable">
+                    <?php echo wp_kses(__('Move All <code>&lt;SCRIPT&gt;</code> tags From HEAD to BODY', 'wp-asset-clean-up'), array('code' => array())); ?>
+                    <!-- [wpacu_lite] -->
+                    <a class="go-pro-link-no-style" target="_blank" href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=optimize_js&utm_medium=move_scripts_to_body'); ?>"><span class="wpacu-tooltip" style="width: auto; left: -16px;"><?php esc_html_e('This is a feature available in the Pro version! Unlock it!', 'wp-asset-clean-up'); ?></span> <img style="margin: 0; opacity: 0.6;" width="20" height="20" src="<?php echo esc_url(WPACU_PLUGIN_URL); ?>/assets/icons/icon-lock.svg" valign="top" alt="" /></a>
+                    <!-- [/wpacu_lite] -->
+                </label>
                 <p class="wpacu_subtitle"><small><em><?php _e('This triggers late after all other optimizations are applied for maximum compatibility', 'wp-asset-clean-up'); ?>.</em></small></p>
             </th>
             <td>
-                <label class="wpacu_switch wpacu_disabled"><!-- Disabled: Available only in the Pro version -->
+                <label class="wpacu_switch
+                 wpacu_disabled"><!-- Disabled: Available only in the Pro version -->
                     <input id="wpacu_move_scripts_to_body_enable"
                            data-target-opacity="wpacu_move_scripts_to_body_info_area"
                            type="checkbox"
-					    <?php
-					    echo (($data['move_scripts_to_body'] == 1) ? 'checked="checked"' : '');
-					    ?>
+                           disabled="disabled"
                            name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[move_scripts_to_body]"
                            value="1" /> <span class="wpacu_slider wpacu_round"></span> </label>
-                &nbsp;<?php _e('This is useful if you want to reduce render-blocking resources and it will move all the <code>&lt;SCRIPT&gt;</code> tags (inline &amp; external) right after the <code>&lt;BODY&gt;</code> opening tag', 'wp-asset-clean-up'); ?>. <span style="color: #0073aa;" class="dashicons dashicons-info"></span> <a id="wpacu-move-scripts-to-body-examples-target" href="#wpacu-move-scripts-to-body-examples"><?php _e('View Examples', 'wp-asset-clean-up'); ?></a>
+                &nbsp;<?php _e('This is useful if you want to reduce render-blocking resources, and it will move all the <code>&lt;SCRIPT&gt;</code> tags (inline &amp; external) right after the <code>&lt;BODY&gt;</code> opening tag', 'wp-asset-clean-up'); ?>. <span style="color: #0073aa;" class="dashicons dashicons-info"></span> <a data-wpacu-modal-target="wpacu-move-scripts-to-body-examples-target" href="#wpacu-move-scripts-to-body-examples"><?php _e('View Examples', 'wp-asset-clean-up'); ?></a>
 
 	            <?php
-	            $moveScriptsToBodyStyle = ($data['move_scripts_to_body'] == 1) ? 'opacity: 1;' : 'opacity: 0.4;';
+                $moveScriptsToBodyStyle = 'opacity: 0.4;';
 	            ?>
                 <div id="wpacu_move_scripts_to_body_info_area" style="<?php echo esc_attr($moveScriptsToBodyStyle); ?>">
                     <p>The option could be enabled if any of the following applies:</p>
@@ -427,7 +433,6 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                 </div>
             </td>
         </tr>
-        <!-- [/wpacu_pro] -->
 
         <tr valign="top">
             <th scope="row" class="setting_title">

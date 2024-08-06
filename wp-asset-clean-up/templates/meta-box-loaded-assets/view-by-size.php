@@ -1,5 +1,7 @@
 <?php
 // no direct access
+use WpAssetCleanUp\MiscAdmin;
+
 if (! isset($data)) {
 	exit;
 }
@@ -14,14 +16,12 @@ $listAreaStatus = $data['plugin_settings']['assets_list_layout_areas_status'];
 if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
     require_once __DIR__.'/_assets-top-area.php';
 
-	$data['view_by_size'] =
 	$data['rows_build_array'] =
 	$data['rows_by_size'] = true;
 
 	$data['rows_assets'] = $data['handles_sizes'] = array();
 
-	require_once __DIR__.'/_asset-style-rows.php';
-	require_once __DIR__.'/_asset-script-rows.php';
+	require_once __DIR__.'/_asset-rows.php';
 
 	$sizesText = array(
         'with_size'   => '<span class="dashicons dashicons-yes"></span>&nbsp; '.esc_html__('Local enqueued files ordered by their size (.css &amp; .js)', 'wp-asset-clean-up'),
@@ -32,7 +32,7 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
 		// Sorting: With Size and External / No Size Detected
 		$rowsAssets = array('with_size' => array(), 'external_na' => array());
 
-		if (isset($data['rows_assets']['with_size'], $data['handles_sizes']) && ! empty($data['handles_sizes'])) {
+		if (isset($data['rows_assets']['with_size']) && ! empty($data['handles_sizes'])) {
 			$dataRowsAssetsWithSize = $data['rows_assets']['with_size'];
             unset($data['rows_assets']['with_size']); // re-built
 			$data['rows_assets']['with_size'] = array();
@@ -96,7 +96,7 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
                                data-wpacu-area="<?php echo esc_html($sizeStatus); ?>_assets">
                             <tbody>
 							<?php
-							echo \WpAssetCleanUp\Misc::stripIrrelevantHtmlTags($assetRowsOutput);
+							echo MiscAdmin::stripIrrelevantHtmlTags($assetRowsOutput);
 							?>
                             </tbody>
                         </table>
@@ -107,19 +107,10 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
 		}
 	}
 }
-
-if ( isset( $data['all']['hardcoded'] ) && ! empty( $data['all']['hardcoded'] ) ) {
-	$data['print_outer_html'] = true; // AJAX call from the Dashboard
-	include_once __DIR__ . '/_assets-hardcoded-list.php';
-} elseif (isset($data['is_frontend_view']) && $data['is_frontend_view']) {
-	echo \WpAssetCleanUp\HardcodedAssets::getHardCodedManageAreaForFrontEndView($data); // AJAX call from the front-end view
-}
 /*
 * ------------------------------------
 * [END] BY PRELOAD STATUS (yes or no)
 * ------------------------------------
 */
 
-include_once __DIR__ . '/_page-options.php';
-
-include '_inline_js.php';
+include_once __DIR__ . '/_view-common-footer.php';

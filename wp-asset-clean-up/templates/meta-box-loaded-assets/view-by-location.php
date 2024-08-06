@@ -1,5 +1,9 @@
 <?php
 // no direct access
+use WpAssetCleanUp\Info;
+use WpAssetCleanUp\Misc;
+use WpAssetCleanUp\MiscAdmin;
+
 if (! isset($data)) {
 	exit;
 }
@@ -10,6 +14,7 @@ if (! isset($data)) {
 // 3rd party external locations (e.g. Google API Fonts, CND urls such as the ones for Bootstrap etc.)
 $listAreaStatus    = $data['plugin_settings']['assets_list_layout_areas_status'];
 $pluginsAreaStatus = $data['plugin_settings']['assets_list_layout_plugin_area_status'] ?: 'expanded';
+
 /*
 * -------------------------
 * [START] BY EACH LOCATION
@@ -24,16 +29,14 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
 
 	$allPlugins            = get_plugins();
 	$allThemes             = wp_get_themes();
-	$allActivePluginsIcons = \WpAssetCleanUp\Misc::getAllActivePluginsIcons();
+	$allActivePluginsIcons = MiscAdmin::getAllActivePluginsIcons();
 
-    $data['view_by_location'] =
     $data['rows_build_array'] =
     $data['rows_by_location'] = true;
 
     $data['rows_assets'] = array();
 
-    require_once __DIR__.'/_asset-style-rows.php';
-    require_once __DIR__.'/_asset-script-rows.php';
+    require_once __DIR__.'/_asset-rows.php';
 
     $locationsText = array(
         'plugins'   => '<span class="dashicons dashicons-admin-plugins"></span> '.esc_html__('From Plugins', 'wp-asset-clean-up').' (.css &amp; .js)',
@@ -124,36 +127,36 @@ HTML;
                 if ($totalLocationAssets > 0) {
                     $locI = 1;
 
-                    // Going through each plugin/theme etc.
+                    // Going through each plugin / theme, etc.
                     foreach ( $values as $locationChild => $values2 ) {
+                        ksort($values2);
+
                         if ($locationMain === 'plugins') {
                             $totalPluginAssets = $totalBulkUnloadedAssetsPerPlugin = 0;
                         }
 
-                        ksort( $values2 );
-
                         $assetRowsOutput = '';
 
                         // Going through each asset from the plugin/theme
-                        foreach ( $values2 as $assetType => $assetRows ) {
+                        foreach ( $values2 as $assetRows ) {
                             foreach ( $assetRows as $assetRow ) {
                                 $assetRowsOutput .= $assetRow . "\n";
 
-                                if ( $locationMain === 'plugins' ) {
-                                    if (strpos( $assetRow, 'wpacu_is_bulk_unloaded' ) !== false ) {
-                                        $totalBulkUnloadedAssetsPerPlugin ++;
+                                if ($locationMain === 'plugins' && strpos($assetRow, 'wpacu_this_asset_row_area_is_hidden') === false) {
+                                    if (strpos($assetRow, 'wpacu_is_bulk_unloaded') !== false) {
+                                        $totalBulkUnloadedAssetsPerPlugin++;
                                     }
 
-                                    $totalPluginAssets ++;
+                                    $totalPluginAssets++;
                                 }
 
-                                $totalFilesArray[$locationMain] ++;
+                                $totalFilesArray[$locationMain]++;
                             }
                         }
 
                         if ( $locationChild !== 'none' ) {
                             if ( $locationMain === 'plugins' ) {
-                                $locationChildText = \WpAssetCleanUp\Info::getPluginInfo( $locationChild, $allPlugins, $allActivePluginsIcons );
+                                $locationChildText = Info::getPluginInfo( $locationChild, $allPlugins, $allActivePluginsIcons );
 
                                 $isLastPluginAsset    = ( count( $values ) - 1 ) === $locationRowCount;
                                 $pluginListContracted = ( $locationMain === 'plugins' && $pluginsAreaStatus === 'contracted' );
@@ -164,7 +167,7 @@ HTML;
                                 // Show it if all the assets from the plugin are bulk unloaded
                                 $showLoadItOnThisPageCheckUncheckAll = $totalBulkUnloadedAssetsPerPlugin === $totalPluginAssets;
                             } elseif ( $locationMain === 'themes' ) {
-                                $locationChildThemeArray = \WpAssetCleanUp\Info::getThemeInfo( $locationChild, $allThemes );
+                                $locationChildThemeArray = Info::getThemeInfo( $locationChild, $allThemes );
                                 $locationChildText = $locationChildThemeArray['output'];
                             } else {
                                 $locationChildText = $locationChild;
@@ -189,7 +192,7 @@ HTML;
                                     <a href="#"
                                        class="wpacu-plugin-contracted-wrap-link wpacu-pro wpacu-link-closed <?php if ( ( count( $values ) - 1 ) === $locationRowCount ) { echo 'wpacu-last-wrap-link'; } ?>">
                                         <div class="wpacu-plugin-title-contracted wpacu-area-contracted">
-                                            <?php echo wp_kses($locationChildText, array('div' => array('class' => array(), 'style' => array()), 'span' => array('class' => array()))); ?> <span style="font-weight: 200;">/</span> <span style="font-weight: 400;"><?php echo (int)$totalPluginAssets; ?></span> files
+                                            <?php echo wp_kses($locationChildText, array('div' => array('class' => array(), 'style' => array()), 'span' => array('class' => array()))); ?> <span style="font-weight: 200;">/</span> <span style="font-weight: 400;"><?php echo (int)$totalPluginAssets; ?></span> file<?php echo ($totalPluginAssets > 1) ? 's' : ''; ?>
                                         </div>
                                     </a>
                                     <?php
@@ -198,9 +201,9 @@ HTML;
                                          data-wpacu-area="<?php echo esc_attr($locationChild); ?>_plugin"
                                          class="wpacu-location-child-area wpacu-area-expanded <?php echo esc_attr($extraClassesToAppend); ?>">
                                         <div class="wpacu-area-title">
-	                                        <?php echo wp_kses($locationChildText, array('div' => array('class' => array(), 'style' => array()), 'span' => array('class' => array()))); ?> <span style="font-weight: 200;">/</span> <span style="font-weight: 400;"><?php echo (int)$totalPluginAssets; ?></span> files
+	                                        <?php echo wp_kses($locationChildText, array('div' => array('class' => array(), 'style' => array()), 'span' => array('class' => array()))); ?> <span style="font-weight: 200;">/</span> <span style="font-weight: 400;"><?php echo (int)$totalPluginAssets; ?></span> file<?php echo ($totalPluginAssets > 1) ? 's' : ''; ?>
                                             <?php
-                                            include '_view-by-location/_plugin-list-expanded-actions.php';
+                                            include __DIR__ . '/_view-by-location/_plugin-list-expanded-actions.php';
                                             ?>
                                         </div>
                                         <div class="wpacu-area-toggle-all-assets">
@@ -217,7 +220,7 @@ HTML;
                                 ?>
                                 <div data-wpacu-area="<?php echo esc_attr($locationChild); ?>_theme"
                                      class="wpacu-location-child-area wpacu-area-expanded <?php echo esc_attr($extraClassesToAppend); ?>">
-                                    <div class="wpacu-area-title <?php if ($locationChildThemeArray['has_icon'] === true) { echo 'wpacu-theme-has-icon'; } ?>"><?php echo \WpAssetCleanUp\Misc::stripIrrelevantHtmlTags($locationChildText); ?></div>
+                                    <div class="wpacu-area-title <?php if ($locationChildThemeArray['has_icon'] === true) { echo 'wpacu-theme-has-icon'; } ?>"><?php echo MiscAdmin::stripIrrelevantHtmlTags($locationChildText); ?></div>
                                     <div class="wpacu-area-toggle-all-assets">
                                         <a class="wpacu-area-contract-all-assets wpacu_area_handles_row_expand_contract"
                                            data-wpacu-area="<?php echo esc_html($locationChild); ?>_theme" href="#">Contract</a>
@@ -228,7 +231,7 @@ HTML;
                                     </div>
                                 </div>
                                 <?php
-                            } else { // WordPress Core, Uploads, 3rd Party etc.
+                            } else { // WordPress Core, Uploads, 3rd Party, etc.
                                 ?>
                                 <div data-wpacu-area="<?php echo esc_attr($locationChild); ?>"
                                      class="wpacu-location-child-area wpacu-area-expanded <?php echo esc_attr($extraClassesToAppend); ?>">
@@ -238,7 +241,6 @@ HTML;
                             }
                         }
                         ?>
-
                         <div class="wpacu-assets-table-list-wrap <?php if ( $locationMain === 'plugins' ) { echo ' wpacu-area-assets-wrap '; }
                             if ( $pluginListContracted ) {
                                 echo ' wpacu-area-closed ';
@@ -250,10 +252,9 @@ HTML;
                             <?php
                             // CONTRACTED (+ -)
                             if ( $locationMain === 'plugins' && $pluginListContracted ) {
-                                include '_view-by-location/_plugin-list-contracted-actions.php';
+                                include __DIR__.'/_view-by-location/_plugin-list-contracted-actions.php';
                             }
                             ?>
-
                             <table <?php
                                    if ( $locationMain === 'plugins' ) { echo ' data-wpacu-plugin="' . esc_attr($locationChild) . '" data-wpacu-area="' . esc_attr($locationChild) . '_plugin" '; }
                                    if ( $locationMain === 'themes' ) { echo ' data-wpacu-area="' . esc_attr($locationChild) . '_theme" '; }
@@ -266,7 +267,7 @@ HTML;
                                         do_action('wpacu_assets_plugin_notice_table_row', $locationChild);
                                     }
 
-                                    echo \WpAssetCleanUp\Misc::stripIrrelevantHtmlTags($assetRowsOutput);
+                                    echo MiscAdmin::stripIrrelevantHtmlTags($assetRowsOutput);
                                     ?>
                                 </tbody>
                             </table>
@@ -276,7 +277,7 @@ HTML;
                     }
                 } else {
                     // There are no loaded CSS/JS
-                    $showOxygenMsg = $locationMain === 'themes' && in_array('oxygen/functions.php', \WpAssetCleanUp\Misc::getActivePlugins());
+                    $showOxygenMsg = $locationMain === 'themes' && in_array('oxygen/functions.php', Misc::getActivePlugins());
 
                     if ($showOxygenMsg) {
                     ?>
@@ -300,23 +301,14 @@ HTML;
                 $locationMainOutput
             );
 
-            echo \WpAssetCleanUp\Misc::stripIrrelevantHtmlTags($locationMainOutput);
+            echo MiscAdmin::stripIrrelevantHtmlTags($locationMainOutput);
         }
-    }
-
-    if ( isset( $data['all']['hardcoded'] ) && ! empty( $data['all']['hardcoded'] ) ) {
-        $data['print_outer_html'] = true; // AJAX call from the Dashboard
-        include_once __DIR__ . '/_assets-hardcoded-list.php';
-    } elseif (isset($data['is_frontend_view']) && $data['is_frontend_view']) {
-        echo \WpAssetCleanUp\HardcodedAssets::getHardCodedManageAreaForFrontEndView($data); // AJAX call from the front-end view
     }
 }
 /*
-* -----------------------
+* -------------------------
 * [END] BY EACH LOCATION
-* -----------------------
+* -------------------------
 */
 
-include_once __DIR__ . '/_page-options.php';
-
-include '_inline_js.php';
+include_once __DIR__ . '/_view-common-footer.php';

@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 /**
@@ -16,6 +18,11 @@ class PluginReview
 	 * @var string[]
 	 */
 	public static $closingReasons = array('maybe_later', 'never_show_it');
+
+    /**
+     * @var string
+     */
+    public static $nonceAction = 'wpacu_close_review_notice_nonce';
 
 	/**
 	 * PluginReview constructor.
@@ -55,7 +62,8 @@ class PluginReview
 
         $closeNoticeUrl = esc_url(wp_nonce_url(
             admin_url('admin-post.php?action='.WPACU_PLUGIN_ID.'_close_review_notice&wpacu_close_reason=_wpacu_close_reason_' . $goBackToCurrentUrl),
-	        WPACU_PLUGIN_ID . '_close_review_notice'
+            self::$nonceAction,
+            'wpacu_nonce'
         ));
 
         $closeNoticeMaybeLaterUrl  = str_replace('_wpacu_close_reason_', 'maybe_later',   $closeNoticeUrl);
@@ -85,9 +93,7 @@ class PluginReview
             </p>
         </div>
         <?php
-        if (! defined('WPACU_ADMIN_REVIEW_NOTICE_SHOWN')) {
-	        define('WPACU_ADMIN_REVIEW_NOTICE_SHOWN', true);
-        }
+        wpacuDefineConstant('WPACU_ADMIN_REVIEW_NOTICE_SHOWN');
 	}
 
 	/**
@@ -112,6 +118,8 @@ class PluginReview
         if ( ! $this->showReviewNotice() ) {
             return;
         }
+
+        $wpacuCloseReviewNonce = wp_create_nonce(self::$nonceAction);
         ?>
         <script type="text/javascript">
             jQuery(document).ready(function($) {
@@ -138,7 +146,7 @@ class PluginReview
                             }
                     };
 
-                    wpacuXhr.send(encodeURI('action=<?php echo WPACU_PLUGIN_ID . '_close_review_notice'; ?>&wpacu_close_reason=' + wpacuCloseAction));
+                    wpacuXhr.send(encodeURI('action=<?php echo WPACU_PLUGIN_ID . '_close_review_notice'; ?>&wpacu_close_reason=' + wpacuCloseAction + '&wpacu_nonce=<?php echo $wpacuCloseReviewNonce; ?>'));
                 });
             });
         </script>
@@ -170,11 +178,17 @@ class PluginReview
      * 1) Used the plugin at least for a week (or a few days if at least 30 assets were unloaded)
      * 2) At least 10 assets unloaded
      * 3) The WIKI was read or one of the minify/combine options were enabled
+     * 4) Only show it to those with access to the plugin's settings
      *
 	 * @return bool
 	 */
 	public function showReviewNotice()
     {
+        if ( ! Menu::userCanManageAssets() ) {
+            // Show the review notice only to people that can access the plugin's settings
+            return false;
+        }
+
         if ($this->showReviewNotice !== null) {
             return $this->showReviewNotice; // already set
         }
@@ -241,7 +255,7 @@ class PluginReview
 	        return $this->showReviewNotice;
         }
 
-	    $unloadedTotalAssets = Misc::getTotalUnloadedAssets();
+	    $unloadedTotalAssets = MiscAdmin::getTotalUnloadedAssets();
 
 	    // Show the notice after one week
 	    $daysPassedAfterFirstUsage = 7;
@@ -267,10 +281,20 @@ class PluginReview
 	 */
 	public function doCloseNotice()
     {
-        $doRedirect = isset($_GET['wpacu_close_reason']) && ! defined('DOING_AJAX');
-        $reason = isset($_REQUEST['wpacu_close_reason']) && in_array($_REQUEST['wpacu_close_reason'], self::$closingReasons) ? sanitize_text_field($_REQUEST['wpacu_close_reason']) : false;
+        if ( ! Menu::userCanManageAssets() ) {
+            echo 'Error: You do not have permission to perform this action.';
+            exit();
+        }
 
-        if (! $reason) {
+        if ( ! isset( $_REQUEST['wpacu_nonce'] ) || ! wp_verify_nonce( $_REQUEST['wpacu_nonce'], self::$nonceAction ) ) {
+            echo 'Error: The security nonce is not valid.';
+            exit();
+        }
+
+        $doRedirect = isset($_GET['wpacu_close_reason']) && ! defined('DOING_AJAX');
+        $reason     = isset($_REQUEST['wpacu_close_reason']) && in_array($_REQUEST['wpacu_close_reason'], self::$closingReasons) ? sanitize_text_field($_REQUEST['wpacu_close_reason']) : false;
+
+        if ( ! $reason ) {
             return;
         }
 

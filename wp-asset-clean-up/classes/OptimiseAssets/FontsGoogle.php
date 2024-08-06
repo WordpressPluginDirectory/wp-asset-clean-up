@@ -1,9 +1,10 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp\OptimiseAssets;
 
 use WpAssetCleanUp\Main;
 use WpAssetCleanUp\Misc;
-use WpAssetCleanUp\Plugin;
 
 /**
  * Class FontsGoogle
@@ -44,7 +45,7 @@ class FontsGoogle
 
 		add_action('wp_head',   array($this, 'preloadFontFiles'), 1);
 		add_action('wp_footer', static function() {
-			if ( Plugin::preventAnyFrontendOptimization() || Main::isTestModeActive() || Main::instance()->settings['google_fonts_remove'] ) {
+			if ( OptimizeCommon::preventAnyFrontendOptimization() || Main::instance()->settings['google_fonts_remove'] ) {
 				return;
 			}
 
@@ -58,8 +59,8 @@ class FontsGoogle
 
 		add_action('init', function() {
 			// don't apply any changes if not in the front-end view (e.g. Dashboard view)
-			// or test mode is enabled and a guest user is accessing the page
-			if ( Plugin::preventAnyFrontendOptimization() || Main::isTestModeActive() || Main::instance()->settings['google_fonts_remove'] ) {
+			// or test mode is enabled, and a guest user is accessing the page
+			if ( OptimizeCommon::preventAnyFrontendOptimization() || Main::instance()->settings['google_fonts_remove'] || ! Main::instance()->settings['google_fonts_display'] ) {
 				return;
 			}
 
@@ -76,8 +77,8 @@ class FontsGoogle
 	public function resourceHints($urls, $relationType)
 	{
 		// don't apply any changes if not in the front-end view (e.g. Dashboard view)
-		// or test mode is enabled and a guest user is accessing the page
-		if (is_admin() || Main::isTestModeActive() || Plugin::preventAnyFrontendOptimization()) {
+		// or test mode is enabled, and a guest user is accessing the page
+		if (is_admin() || OptimizeCommon::preventAnyFrontendOptimization()) {
 			return $urls;
 		}
 
@@ -111,12 +112,12 @@ class FontsGoogle
 	public function preloadFontFiles()
 	{
 		// don't apply any changes if not in the front-end view (e.g. Dashboard view)
-		// or test mode is enabled and a guest user is accessing the page
-		if ( Plugin::preventAnyFrontendOptimization() || Main::isTestModeActive() ) {
+		// or test mode is enabled, and a guest user is accessing the page
+		if ( OptimizeCommon::preventAnyFrontendOptimization() ) {
 			return;
 		}
 
-		if (! $preloadFontFiles = trim(Main::instance()->settings['google_fonts_preload_files'])) {
+		if ( ! $preloadFontFiles = trim(Main::instance()->settings['google_fonts_preload_files']) ) {
 			return;
 		}
 
@@ -152,13 +153,14 @@ class FontsGoogle
 	 * @param $htmlSource
 	 *
 	 * @return false|mixed|string|void
-	 */
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public static function alterHtmlSource($htmlSource)
 	{
 		// don't apply any changes if not in the front-end view (e.g. Dashboard view)
 		// or test mode is enabled and a guest user is accessing the page
 		// or an AMP page is accessed
-		if ( Plugin::preventAnyFrontendOptimization() || Main::isTestModeActive()) {
+		if ( OptimizeCommon::preventAnyFrontendOptimization() ) {
 			return $htmlSource;
 		}
 
@@ -181,7 +183,7 @@ class FontsGoogle
 			preg_match_all( '#<link[^>]*' . self::$matchesStr . '.*(>)#Usmi', $altHtmlSource, $matchesFromLinkTags, PREG_SET_ORDER );
 
 			// Needs to match at least one to carry on with the replacements
-			if ( isset( $matchesFromLinkTags[0] ) && ! empty( $matchesFromLinkTags[0] ) ) {
+			if ( ! empty( $matchesFromLinkTags[0] ) ) {
 				if ( Main::instance()->settings['google_fonts_combine'] ) {
 					/*
 					 * "Combine Google Fonts" IS enabled
@@ -307,9 +309,9 @@ class FontsGoogle
 	}
 
 	/**
-	 * @param $linkHrefOriginal
+	 * @param string $linkHrefOriginal
 	 * @param bool $escHtml
-	 * @param $alterFor
+	 * @param string $alterFor
 	 *
 	 * @return string
 	 */
@@ -461,49 +463,94 @@ class FontsGoogle
 	 */
 	public static function alterGoogleFontUrlFromJsContent($jsContent)
 	{
-		if (stripos($jsContent, 'fonts.googleapis.com') === false) {
-			return $jsContent;
-		}
-
 		$newJsOutput = $jsContent;
 
-		preg_match_all('#fonts.googleapis.com(.*?)(["\'])#si', $jsContent, $matchesFromJsCode);
+        if (stripos($jsContent, 'fonts.googleapis.com') !== false) {
+            preg_match_all('#fonts.googleapis.com(.*?)(["\'])#si', $jsContent, $matchesFromJsCode);
 
-		if (isset($matchesFromJsCode[0]) && ! empty($matchesFromJsCode)) {
-			foreach ($matchesFromJsCode[0] as $match) {
-				$matchRule = $match;
-				$googleApisUrl = trim($match, '"\' ');
+            if (isset($matchesFromJsCode[0]) && ! empty($matchesFromJsCode)) {
+                foreach ($matchesFromJsCode[0] as $match) {
+                    $matchRule     = $match;
+                    $googleApisUrl = trim($match, '"\' ');
 
-				$newGoogleApisUrl = self::alterGoogleFontLink($googleApisUrl, false, 'js');
-				if ($newGoogleApisUrl !== $googleApisUrl) {
-					$newJsMatchOutput = str_replace($googleApisUrl, $newGoogleApisUrl, $matchRule);
-					$newJsOutput      = str_replace($matchRule, $newJsMatchOutput, $newJsOutput);
-				}
-			}
-		}
+                    $newGoogleApisUrl = self::alterGoogleFontLink($googleApisUrl, false, 'js');
+                    if ($newGoogleApisUrl !== $googleApisUrl) {
+                        $newJsMatchOutput = str_replace($googleApisUrl, $newGoogleApisUrl, $matchRule);
+                        $newJsOutput      = str_replace($matchRule, $newJsMatchOutput, $newJsOutput);
+                    }
+                }
+            }
+        }
 
-		// Look for any "WebFontConfig = { google: { families: ['font-one', 'font-two'] } }" patterns
-		if ( stripos( $jsContent, 'WebFontConfig' ) !== false
-		     && preg_match_all( '#WebFontConfig(.*?)google(\s+|):(\s+|){(\s+|)families(\s+|):(?<families>.*?)]#s', $jsContent, $webFontConfigMatches )
-		     && isset( $webFontConfigMatches['families'] ) && ! empty( $webFontConfigMatches['families'] )
-		) {
-			foreach ($webFontConfigMatches['families'] as $webFontConfigKey => $webFontConfigMatch) {
-				$originalWholeMatch  = $webFontConfigMatches[0][$webFontConfigKey];
-				$familiesMatchOutput = trim($webFontConfigMatch);
+        foreach (array('WebFontConfig', 'WebFont') as $webFontStr) {
+            if (stripos($jsContent, $webFontStr) !== false) {
+                // Case 1:
+                // Look for any "WebFontConfig = { google: { families: ['font-one', 'font-two'] } }" patterns
+                // and for any "WebFont = { google: { families: ['font-one', 'font-two'] } }" patterns
+                preg_match_all(
+                    '#'.$webFontStr.'(.*?)google(\s+|):(\s+|){(\s+|)families(\s+|):(?<families>.*?)]#s',
+                    $jsContent,
+                    $webFontConfigMatches
+                );
 
-				// NO match or existing "display" parameter was found? Do not continue
-				if (! $familiesMatchOutput || strpos($familiesMatchOutput, 'display=')) {
-					continue;
-				}
+                if ( ! empty($webFontConfigMatches['families']) ) {
+                    foreach ($webFontConfigMatches['families'] as $webFontConfigKey => $webFontConfigMatch) {
+                        $originalWholeMatch  = $webFontConfigMatches[0][$webFontConfigKey];
+                        $familiesMatchOutput = trim($webFontConfigMatch);
 
-				// Alter the matched string
-				$familiesNewOutput      = preg_replace('/([\'"])$/', '&display='.Main::instance()->settings['google_fonts_display'].'\\1', $familiesMatchOutput);
-				$newWebFontConfigOutput = str_replace($familiesMatchOutput, $familiesNewOutput, $originalWholeMatch);
+                        // NO match or existing "display" parameter was found? Do not continue
+                        if ( ! $familiesMatchOutput || strpos($familiesMatchOutput, 'display=') ) {
+                            continue;
+                        }
 
-				// Finally, do the replacement
-				$newJsOutput            = str_replace($originalWholeMatch, $newWebFontConfigOutput, $newJsOutput);
-			}
-		}
+                        // Alter the matched string
+                        $familiesNewOutput      = preg_replace(
+                            '/([\'"])$/',
+                            '&display=' . Main::instance()->settings['google_fonts_display'] . '\\1',
+                            $familiesMatchOutput
+                        );
+
+                        $newWebFontConfigOutput = str_replace($familiesMatchOutput, $familiesNewOutput, $originalWholeMatch);
+
+                        // Finally, do the replacement
+                        $newJsOutput = str_replace($originalWholeMatch, $newWebFontConfigOutput, $newJsOutput);
+                    }
+                }
+
+                // Case 2
+                // Look for any "WebFontConfig['google'] = {families: ['font-one', 'font-two']};" / "WebFontConfig.google = {families: ['font-one', 'font-two']};"
+                // and for any "WebFont['google'] = {families: ['font-one', 'font-two']};" / "WebFont.google = {families: ['font-one', 'font-two']};"
+                preg_match_all(
+                    '#'.$webFontStr.'(.*?)google(.*?)=(.*?)families(\s+|):(?<families>.*?)]#si',
+                    $jsContent,
+                    $webFontConfigMatchesTwo
+                );
+
+                if ( ! empty($webFontConfigMatchesTwo['families']) ) {
+                    foreach ($webFontConfigMatchesTwo['families'] as $webFontConfigKey => $webFontConfigMatch) {
+                        $originalWholeMatch  = $webFontConfigMatchesTwo[0][$webFontConfigKey];
+                        $familiesMatchOutput = trim($webFontConfigMatch);
+
+                        // NO match or existing "display" parameter was found? Do not continue
+                        if ( ! $familiesMatchOutput || strpos($familiesMatchOutput, 'display=')) {
+                            continue;
+                        }
+
+                        // Alter the matched string
+                        $familiesNewOutput = preg_replace(
+                            '/([\'"])$/',
+                            '&display=' . Main::instance()->settings['google_fonts_display'] . '\\1',
+                            $familiesMatchOutput
+                        );
+
+                        $newWebFontConfigOutput = str_replace($familiesMatchOutput, $familiesNewOutput, $originalWholeMatch);
+
+                        // Finally, do the replacement
+                        $newJsOutput = str_replace($originalWholeMatch, $newWebFontConfigOutput, $newJsOutput);
+                    }
+                }
+            }
+        }
 
 		return $newJsOutput;
 	}
@@ -592,7 +639,7 @@ class FontsGoogle
 			}
 		}
 
-		if (! empty($fontsArray)) {
+		if ( ! empty($fontsArray) ) {
 			$finalCombinedParameters = '';
 			ksort($fontsArray['families']);
 
@@ -611,13 +658,13 @@ class FontsGoogle
 			$finalCombinedParameters = trim($finalCombinedParameters, '|');
 
 			// Subsets
-			if (isset($fontsArray['subsets']) && ! empty($fontsArray['subsets'])) {
+			if ( ! empty($fontsArray['subsets']) ) {
 				sort($fontsArray['subsets']);
 				$finalCombinedParameters .= '&subset=' . implode(',', array_unique($fontsArray['subsets']));
 			}
 
 			// Effects
-			if (isset($fontsArray['effects']) && ! empty($fontsArray['effects'])) {
+			if ( ! empty($fontsArray['effects']) ) {
 				sort($fontsArray['effects']);
 				$finalCombinedParameters .= '&effect=' . implode('|', array_unique($fontsArray['effects']));
 			}
@@ -635,7 +682,7 @@ LINK;
 			/*
 			 * Loading Type: Render-Blocking (Default)
 			 */
-			if (! Main::instance()->settings['google_fonts_combine_type']) {
+			if ( ! Main::instance()->settings['google_fonts_combine_type'] ) {
 				$finalCombinedLink .= "\n";
 				$htmlSource = str_replace(self::COMBINED_LINK_DEL, apply_filters('wpacu_combined_google_fonts_link_tag', $finalCombinedLink), $htmlSource);
 			}
@@ -658,7 +705,7 @@ LINK;
 			if (Main::instance()->settings['google_fonts_combine_type'] === 'async') { // Async via Web Font Loader
 				$subSetsStr = '';
 
-				if (isset($fontsArray['subsets']) && ! empty($fontsArray['subsets'])) {
+				if ( ! empty($fontsArray['subsets']) ) {
 					sort($fontsArray['subsets']);
 					$subSetsStr = implode(',', array_unique($fontsArray['subsets']));
 				}
@@ -686,7 +733,7 @@ LINK;
 					// Append extra parameters to the last family from the list
 					if ($iCount === count($fontsArray['families']) - 1) {
 						// Effects
-						if (isset($fontsArray['effects']) && ! empty($fontsArray['effects'])) {
+						if ( ! empty($fontsArray['effects']) ) {
 							sort($fontsArray['effects']);
 							$wfConfigGoogleFamily .= '&effect=' . implode('|', array_unique($fontsArray['effects']));
 						}
@@ -759,6 +806,6 @@ LINK;
 	 */
 	public static function preventAnyChange()
 	{
-		return defined( 'WPACU_ALLOW_ONLY_UNLOAD_RULES' ) && WPACU_ALLOW_ONLY_UNLOAD_RULES;
+		return wpacuIsDefinedConstant( 'WPACU_ALLOW_ONLY_UNLOAD_RULES' );
 	}
 }

@@ -6,8 +6,8 @@
     'aliases' => 
     array (
     ),
-    'reference' => 'fd74014d14780871e65b9f8ab672ec8a7b669152',
-    'name' => 'wp-asset-clean-up/wp-asset-clean-up-lite',
+    'reference' => '6ef227c5c0bb8a3a5e91e023fb44e40b9afbd900',
+    'name' => 'wp-asset-clean-up/wp-asset-clean-up-pro',
   ),
   'versions' => 
   array (
@@ -29,14 +29,23 @@
       ),
       'reference' => 'e7d13b2c7e2f2268e1424aaed02085518afa02d9',
     ),
-    'wp-asset-clean-up/wp-asset-clean-up-lite' => 
+    'psr/cache' => 
+    array (
+      'pretty_version' => '1.0.1',
+      'version' => '1.0.1.0',
+      'aliases' => 
+      array (
+      ),
+      'reference' => 'd11b50ad223250cf17b86e38383413f5a6764bf8',
+    ),
+    'wp-asset-clean-up/wp-asset-clean-up-pro' => 
     array (
       'pretty_version' => 'dev-master',
       'version' => 'dev-master',
       'aliases' => 
       array (
       ),
-      'reference' => 'fd74014d14780871e65b9f8ab672ec8a7b669152',
+      'reference' => '6ef227c5c0bb8a3a5e91e023fb44e40b9afbd900',
     ),
   ),
 );

@@ -1,11 +1,13 @@
 <?php
+use WpAssetCleanUp\MetaBoxes;
+
 if (! isset($data)) {
 	exit;
 }
+
 // This file can be loaded either via edit post/page from the Dashboard when the plugin is set to not load based on the matched URI
 // or in the front-end view when "wpacu_ignore_no_load_option" query string is used (whenever "Manage in the front-end" is enabled)
-?>
-<?php
+
 if ($data['bulk_unloaded_type'] === 'post_type') {
 	$isWooPage = $iconShown = false;
 
@@ -80,9 +82,9 @@ if ($data['status'] === 5) {
 $data['show_page_options'] = true;
 
 if ($data['post_id'] > 0) {
-	$data['page_options'] = \WpAssetCleanUp\MetaBoxes::getPageOptions( $data['post_id'] );
+	$data['page_options'] = MetaBoxes::getPageOptions( $data['post_id'] );
 } elseif (isset($data['wpacu_type']) && $data['wpacu_type'] === 'front_page') {
-	$data['page_options'] = \WpAssetCleanUp\MetaBoxes::getPageOptions( 0, 'front_page' );
+	$data['page_options'] = MetaBoxes::getPageOptions( 0, 'front_page' );
 }
 
 $data['page_options_with_assets_manager_no_load'] = true;

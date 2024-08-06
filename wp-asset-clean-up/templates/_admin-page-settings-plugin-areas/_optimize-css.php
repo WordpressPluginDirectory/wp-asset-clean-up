@@ -146,10 +146,10 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
         <tr>
             <td colspan="2" style="padding: 0;">
                 <div class="wpacu-combine-notice-default wpacu_hide" style="line-height: 22px; background: #f8f8f8; border-left: 4px solid #008f9c; padding: 10px; margin: 0 0 15px;">
-                    <strong><?php _e('NOTE', 'wp-asset-clean-up'); ?>:</strong> <?php _e('Concatenating assets is no longer a recommended practice in HTTP/2', 'wp-asset-clean-up'); ?>. &nbsp; <a id="wpacu-http2-info-css-target" href="#wpacu-http2-info-css"><?php _e('Read more', 'wp-asset-clean-up'); ?></a> &nbsp;/&nbsp; <a class="wpacu_verify_http2_protocol" target="_blank" href="https://tools.keycdn.com/http2-test"><strong><?php _e('Verify if the website is delivered through the HTTP/2 network protocol', 'wp-asset-clean-up'); ?></strong></a>
+                    <strong><?php _e('NOTE', 'wp-asset-clean-up'); ?>:</strong> <?php _e('Concatenating assets is no longer a recommended practice in HTTP/2', 'wp-asset-clean-up'); ?>. &nbsp; <a data-wpacu-modal-target="wpacu-http2-info-css-target" href="#wpacu-http2-info-css"><?php _e('Read more', 'wp-asset-clean-up'); ?></a> &nbsp;/&nbsp; <a class="wpacu_verify_http2_protocol" target="_blank" href="https://tools.keycdn.com/http2-test"><strong><?php _e('Verify if the website is delivered through the HTTP/2 network protocol', 'wp-asset-clean-up'); ?></strong></a>
                 </div>
                 <div class="wpacu-combine-notice-http-2-detected wpacu_hide" style="line-height: 22px; background: #f8f8f8; border-left: 4px solid #008f9c; padding: 10px; margin: 0 0 15px;">
-                    <span class="wpacu_http2_protocol_is_supported" style="color: green; font-weight: 400;"><span class="dashicons dashicons-yes-alt"></span> Your website `<span style="font-weight: 500;"><?php echo get_site_url(); ?></span>` is delivered through the HTTP/2 network protocol, thus, the website will be as fast without using this feature which might require maintenance once in a while.</span> <a class="wpacu-http2-info-css-target" href="#wpacu-http2-info-css"><?php _e('Read more', 'wp-asset-clean-up'); ?></a>
+                    <span class="wpacu_http2_protocol_is_supported" style="color: green; font-weight: 400;"><span class="dashicons dashicons-yes-alt"></span> Your website `<span style="font-weight: 500;"><?php echo get_site_url(); ?></span>` is delivered through the HTTP/2 network protocol, thus, the website will be as fast without using this feature which might require maintenance once in a while.</span> <a data-wpacu-modal-target="wpacu-http2-info-css-target" href="#wpacu-http2-info-css"><?php _e('Read more', 'wp-asset-clean-up'); ?></a>
                 </div>
             </td>
         </tr>
@@ -177,7 +177,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                            name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[combine_loaded_css]"
                            value="1" /> <span class="wpacu_slider wpacu_round"></span> </label>
 
-                &nbsp;<small>* if <code style="font-size: inherit;"><?php echo '/'.str_replace(Misc::getWpRootDirPath(), '', WP_CONTENT_DIR) . \WpAssetCleanUp\OptimiseAssets\OptimizeCommon::getRelPathPluginCacheDir(); ?></code> directory is not writable for some reason, this feature will not work; requires the DOMDocument XML DOM Parser to be enabled in PHP (which it is by default) for maximum performance</small>
+                &nbsp;<small>* the individual files will be combined into larger CSS files and referenced from <code style="font-size: inherit;"><?php echo '/'.str_replace(dirname(WP_CONTENT_DIR), '', WP_CONTENT_DIR) . OptimizeCommon::getRelPathPluginCacheDir(); ?>css/</code></small>
                 &nbsp;
 			    <?php
 			    if (! empty($data['is_optimize_css_enabled_by_other_party'])) {
@@ -305,14 +305,17 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
         <!-- Pro Feature -->
         <tr valign="top">
             <th scope="row" class="setting_title">
-                <label style="cursor: auto;"><?php _e('Defer CSS Loaded in the <code>&lt;BODY&gt;</code> (Footer)', 'wp-asset-clean-up'); ?> <a class="go-pro-link-no-style" target="_blank" href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=plugin_usage_settings&utm_medium=local_fonts_optimization'); ?>"><span class="wpacu-tooltip" style="width: 186px;"><?php _e('This is a feature available in the Pro version! Unlock it!', 'wp-asset-clean-up'); ?></span> <img style="opacity: 0.6;" width="20" height="20" src="<?php echo esc_url(WPACU_PLUGIN_URL.'/assets/icons/icon-lock.svg'); ?>" valign="top" alt="" /></a></label>
+                <label style="cursor: auto;">
+                    <?php _e('Defer CSS Loaded in the <code>&lt;BODY&gt;</code> (Footer)', 'wp-asset-clean-up'); ?>
+                    <a class="go-pro-link-no-style" target="_blank" href="<?php echo apply_filters('wpacu_go_pro_affiliate_link', WPACU_PLUGIN_GO_PRO_URL.'?utm_source=optimize_css_settings&utm_medium=defer_css_loaded_body'); ?>"><span class="wpacu-tooltip" style="width: auto; left: -15px;"><?php _e('This is a feature available in the Pro version! Unlock it!', 'wp-asset-clean-up'); ?></span> <img style="margin: 0; opacity: 0.6;" width="20" height="20" src="<?php echo esc_url(WPACU_PLUGIN_URL.'/assets/icons/icon-lock.svg'); ?>" valign="top" alt="" /></a>
+                </label>
             </th>
             <td>
                 <div>
                     <ul style="margin: 0;">
                         <li style="margin-bottom: 13px;" class="wpacu-fancy-radio"><label for="wpacu_defer_css_loaded_body_moved"><input style="margin: 0;" disabled="disabled" id="wpacu_defer_css_loaded_body_moved" type="radio" name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[defer_css_loaded_body]" checked="checked" /> &nbsp;Yes, for any stylesheet LINK tags moved from HEAD to BODY via Asset CleanUp Pro * <em>default</em></label></li>
                         <li style="margin-bottom: 13px;" class="wpacu-fancy-radio"><label for="wpacu_defer_css_loaded_body_all"><input style="margin: 0;" disabled="disabled" id="wpacu_defer_css_loaded_body_all" type="radio" name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[defer_css_loaded_body]" /> &nbsp;Yes, for all the stylesheet LINK tags that are moved or already loaded in the BODY</label></li>
-                        <li class="wpacu-fancy-radio"><label for="wpacu_defer_css_loaded_body_no"><input disabled="disabled" id="wpacu_defer_css_loaded_body_no" type="radio" name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[defer_css_loaded_body]" /> &nbsp;No, leave the stylesheet LINK tags from the BODY as they are without any alteration</label></li>
+                        <li><label for="wpacu_defer_css_loaded_body_no" class="wpacu-fancy-radio"><input disabled="disabled" id="wpacu_defer_css_loaded_body_no" type="radio" name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[defer_css_loaded_body]" /> &nbsp;No, leave the stylesheet LINK tags from the BODY as they are without any alteration</label></li>
                     </ul>
                 </div>
                 <div>
@@ -322,6 +325,24 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
             </td>
         </tr>
         <!-- [/wpacu_lite] -->
+
+        <tr valign="top" id="wpacu-critical-css-status">
+            <th scope="row" class="setting_title">
+                <label style="cursor: auto;"><?php _e('Critical CSS Status', 'wp-asset-clean-up'); ?></label>
+                <p class="wpacu_subtitle"><small><em><?php echo sprintf(__('This option is useful if you want to stop using the critical CSS functionality for any reason from %s', 'wp-asset-clean-up'), WPACU_PLUGIN_TITLE); ?></em></small></p>
+            </th>
+            <td>
+                <div>
+                    <ul style="margin: 0 0 18px;">
+                        <li style="margin-bottom: 13px;" class="wpacu-fancy-radio"><label for="wpacu_critical_css_loaded"><input style="margin: 0;" id="wpacu_critical_css_loaded" type="radio" name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[critical_css_status]" <?php if (in_array($data['critical_css_status'], array('on', ''))) { ?>checked="checked"<?php } ?> value="on" /> &nbsp;Load any critical CSS that is turned on from "CSS &amp; JS MANAGER" -&gt; "MANAGE CRITICAL CSS" and through the "wpacu_critical_css" hook/filter</label></li>
+                        <li class="wpacu-fancy-radio"><label for="wpacu_critical_css_disabled"><input style="margin: 0;" class="wpacu-disabled-status" id="wpacu_critical_css_disabled" type="radio" name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[critical_css_status]" <?php if ($data['critical_css_status'] === 'off') { ?>checked="checked"<?php } ?> value="off" /> &nbsp;Do not load any critical CSS from "CSS &amp; JS MANAGER" -&gt; "MANAGE CRITICAL CSS" / This will make the settings from the management page dormant and deactivate the "wpacu_critical_css" hook/filter, this option being useful when you want to stop using any critical CSS from <?php echo WPACU_PLUGIN_TITLE; ?> (e.g. you have it enabled through another plugin or via custom coding in your theme)</label></li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="wpacu-warning" style="font-size: inherit;">Once implemented in the pages of your choice, there will be no more render-blocking CSS loading, considerably improving the score for "Eliminate render-blocking resources" (leaving only JavaScript files showing in the report, if any). All the other CSS, apart from the critical CSS would be render after the above the fold is shown (non render-blocking).</p>
+                </div>
+            </td>
+        </tr>
 
         <tr valign="top">
             <th scope="row" class="setting_title">
@@ -334,7 +355,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                            data-target-opacity="wpacu_cache_dynamic_loaded_css_info_area"
                            type="checkbox"
 					    <?php
-					    echo (($data['cache_dynamic_loaded_css'] == 1) ? 'checked="checked"' : '');
+					    echo ($data['cache_dynamic_loaded_css'] == 1) ? 'checked="checked"' : '';
 					    ?>
                            name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[cache_dynamic_loaded_css]"
                            value="1" /> <span class="wpacu_slider wpacu_round"></span> </label>

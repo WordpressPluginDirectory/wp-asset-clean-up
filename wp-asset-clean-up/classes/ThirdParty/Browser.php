@@ -1,4 +1,7 @@
 <?php
+/** @noinspection StrStrUsedAsStrPosInspection */
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp\ThirdParty;
 
 /**

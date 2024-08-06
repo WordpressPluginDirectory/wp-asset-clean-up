@@ -2,6 +2,9 @@
 /*
  * No direct access to this file
  */
+
+use WpAssetCleanUp\Tips;
+
 if (! isset($data, $selectedTabArea)) {
 	exit;
 }
@@ -19,7 +22,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                 <p class="wpacu_subtitle"><small><em><?php echo sprintf(esc_html__('It will fallback to the default browser\'s Emojis and not fetch the ones from %s', 'wp-asset-clean-up'), 'https://s.w.org/'); ?></em></small></p>
             </th>
             <td>
-                <label class="wpacu_switch">
+                <label class="wpacu_switch wpacu_del_type">
                     <input id="wpacu_disable_emojis"
                            type="checkbox"
 						<?php echo (($data['disable_emojis'] == 1) ? 'checked="checked"' : ''); ?>
@@ -43,7 +46,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                 <p style="margin-top: 2px;" class="wpacu_subtitle"><small><a target="_blank" href="https://wordpress.org/support/article/embeds/">Read more about Embeds</a></small></p>
             </th>
             <td>
-                <label class="wpacu_switch">
+                <label class="wpacu_switch wpacu_del_type">
                     <input id="wpacu_disable_wp_embed"
                            type="checkbox"
 					    <?php echo (($data['disable_oembed'] == 1) ? 'checked="checked"' : ''); ?>
@@ -57,8 +60,8 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                     <?php _e('You can disable this feature if you do not need it.', 'wp-asset-clean-up'); ?>
                     <p><?php _e('The situations where you might want to keep it enabled include:', 'wp-asset-clean-up'); ?>
                     <ul>
-                        <li>- You want other users to embed your WordPress blog articles on their site.</li>
-                        <li>- You would like to embed other websites' articles, YouTube videos, Tweets etc. on you WordPress blog articles.</li>
+                        <li>— You want other users to embed your WordPress blog articles on their site.</li>
+                        <li>— You would like to embed other websites' articles, YouTube videos, Tweets etc. on you WordPress blog articles.</li>
                     </ul>
 				    <?php echo sprintf(__('If this option is kept enabled, the file <em>%s</em> is also loaded which adds up to the number of loaded HTTP requests.', 'wp-asset-clean-up'), '/wp-includes/js/wp-embed.min.js'); ?>
                 </div>
@@ -71,7 +74,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                 <p style="margin-top: 2px;" class="wpacu_subtitle"><small>The top admin bar (toolbar) requires Dashicons to function properly.<br /><a target="_blank" href="https://developer.wordpress.org/resource/dashicons/">Read about Dashicons</a> | <a target="_blank" href="https://wordpress.org/support/article/toolbar/">Read about Toolbar</a></small></p>
             </th>
             <td>
-                <label class="wpacu_switch">
+                <label class="wpacu_switch wpacu_del_type">
                     <input id="wpacu_disable_dashicons_for_guests" type="checkbox"
 					    <?php echo (($data['disable_dashicons_for_guests'] == 1) ? 'checked="checked"' : ''); ?>
                            name="<?php echo WPACU_PLUGIN_ID . '_global_unloads'; ?>[disable_dashicons_for_guests]"
@@ -87,7 +90,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                 <label for="wpacu_disable_wp_block_library"><?php echo sprintf(__('Disable %s Site-Wide', 'wp-asset-clean-up'), 'Gutenberg CSS Block Library'); ?> <span style="color: #cc0000;" class="dashicons dashicons-wordpress-alt wordpress-core-file"><span class="wpacu-tooltip">WordPress Core File<br />Not sure if needed or not? In this case, it's better to leave it loaded to avoid breaking the website.</span></span></label>
             </th>
             <td>
-                <label class="wpacu_switch">
+                <label class="wpacu_switch wpacu_del_type">
                     <input id="wpacu_disable_wp_block_library" type="checkbox"
 					    <?php echo (($data['disable_wp_block_library'] == 1) ? 'checked="checked"' : ''); ?>
                            name="<?php echo WPACU_PLUGIN_ID . '_global_unloads'; ?>[disable_wp_block_library]"
@@ -96,7 +99,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
 			    <?php echo sprintf(__('This will unload %s', 'wp-asset-clean-up'), 'Gutenberg Blocks CSS file'); ?> -&gt; (<em>/wp-includes/css/dist/block-library/style.min.css</em>) (52 KB) - <span style="color: #0073aa; vertical-align: middle;" class="dashicons dashicons-info"></span> <a href="https://assetcleanup.com/docs/?p=713" target="_blank">Not sure if you need it or not? Use Coverage from Chrome DevTools!</a>
                 <p style="margin-top: 10px;"><?php _e('If you\'re not using Gutenberg blocks in your posts/page (e.g. you prefer the Classic Editor), then you can unload this file site-wide to avoid an extra render-blocking external CSS file load.', 'wp-asset-clean-up'); ?></p>
                 <?php
-                if ($extraTip = \WpAssetCleanUp\Tips::ceGutenbergCssLibraryBlockTip()) {
+                if ($extraTip = Tips::ceGutenbergCssLibraryBlockTip()) {
 	                echo '<p class="wpacu-warning" style="font-size: 100%;"><strong>Extra Tip:</strong> '.$extraTip.'</p>';
                 }
                 ?>
@@ -115,10 +118,10 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
             <td>
                 <?php if ($isjQueryMigrateUnloaded) { ?>
                     <div style="margin-bottom: 10px;" class="wpacu-warning">
-                        <p style="margin-top: 0;"><span style="color: darkorange;" class="dashicons dashicons-warning"></span> Starting from WordPress 5.5, jQuery Migrate is no longer loaded, thus this option is no longer relevant for your website (which uses WordPress <?php echo esc_html($wp_version); ?>) as it acts as being always enabled. If you need to have jQuery Migrate loaded as it was before, please check the <strong><a rel="noopener noreferrer" target="_blank" href="https://wordpress.org/plugins/enable-jquery-migrate-helper/">Enable jQuery Migrate Helper</a></strong> plugin</p>
+                        <p style="margin-top: 0;"><span style="color: darkorange;" class="dashicons dashicons-warning"></span> Starting from WordPress 5.5, jQuery Migrate is no longer loaded, thus this option is no longer relevant for your website (which uses WordPress <?php echo esc_html($wp_version); ?>) as it acts as being always enabled. If you need to have jQuery Migrate loaded as it was before, please check the <strong><a rel="noopener noreferrer" target="_blank" href="https://wordpress.org/plugins/enable-jquery-migrate-helper/">Enable jQuery Migrate Helper</a></strong> plugin.</p>
                     </div>
                 <?php } ?>
-                <label class="wpacu_switch" style="opacity: <?php echo esc_attr($jqueryMigrateUnloadOpacity); ?>;">
+                <label class="wpacu_switch wpacu_del_type" style="opacity: <?php echo esc_attr($jqueryMigrateUnloadOpacity); ?>;">
                     <input id="wpacu_disable_jquery_migrate" type="checkbox"
 						<?php echo (($data['disable_jquery_migrate'] == 1) ? 'checked="checked"' : ''); ?>
                            name="<?php echo WPACU_PLUGIN_ID . '_global_unloads'; ?>[disable_jquery_migrate]"
@@ -134,7 +137,7 @@ $styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-ce
                 <label for="wpacu_disable_comment_reply"><?php echo sprintf(__('Disable %s Site-Wide', 'wp-asset-clean-up'), 'Comment Reply'); ?> <span style="color: #cc0000;" class="dashicons dashicons-wordpress-alt wordpress-core-file"><span class="wpacu-tooltip">WordPress Core File<br /><?php _e('Not sure if needed or not? In this case, it\'s better to leave it loaded to avoid breaking the website.', 'wp-asset-clean-up'); ?></span></span></label>
             </th>
             <td>
-                <label class="wpacu_switch">
+                <label class="wpacu_switch wpacu_del_type">
                     <input id="wpacu_disable_comment_reply" type="checkbox"
 						<?php echo (($data['disable_comment_reply'] == 1) ? 'checked="checked"' : ''); ?>
                            name="<?php echo WPACU_PLUGIN_ID . '_global_unloads'; ?>[disable_comment_reply]"

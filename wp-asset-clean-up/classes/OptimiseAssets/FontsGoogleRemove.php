@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp\OptimiseAssets;
 
 /**
@@ -63,7 +65,7 @@ class FontsGoogleRemove
 		$stripLinksList = array();
 
 		// Needs to match at least one to carry on with the replacements
-		if (isset($matchesFromLinkTags[0]) && ! empty($matchesFromLinkTags[0])) {
+		if ( ! empty($matchesFromLinkTags[0]) ) {
 			foreach ($matchesFromLinkTags as $linkTagArray) {
 				$linkTag = trim(trim($linkTagArray[0], '"\''));
 
@@ -117,7 +119,7 @@ class FontsGoogleRemove
 			// Is the content relevant?
 			preg_match_all('/(;?)(@import (?<url>url\(|\()?(?P<quotes>["\'()]?).+?(?P=quotes)(?(url)\)));?/', $styleInlineContent, $matches);
 
-			if (isset($matches[0]) && ! empty($matches[0])) {
+			if ( ! empty($matches[0]) ) {
 				foreach ($matches[0] as $matchedImport) {
 					$newStyleInlineContent = str_replace($matchedImport, '', $newStyleInlineContent);
 				}
@@ -174,25 +176,59 @@ class FontsGoogleRemove
 		}
 
 		$webFontConfigReferenceOne = "#src(\s+|)=(\s+|)(?<startDel>'|\")(\s+|)((http:|https:|)(".implode('|', self::$possibleWebFontConfigCdnPatterns).")(\s+|))(?<endDel>'|\")#si";
-
-		if (stripos($jsContent, 'WebFontConfig') !== false
-		    && preg_match('/(WebFontConfig\.|\'|"|)google(\s+|)([\'":=])/i', $jsContent)
-		    && preg_match_all($webFontConfigReferenceOne, $jsContent, $matches) && ! empty($matches)
-		) {
-			foreach ($matches[0] as $matchIndex => $matchRow) {
-				$jsContent = str_replace(
-					$matchRow,
-					'src=' . $matches['startDel'][$matchIndex] . $matches['endDel'][$matchIndex] . ';/* Stripped by ' . WPACU_PLUGIN_TITLE . ' */',
-					$jsContent
-				);
-			}
-		}
+        if ( preg_match('/(WebFontConfig\.|\'|"|)google(\s+|)([\'":=])/i', $jsContent)
+            && preg_match_all($webFontConfigReferenceOne, $jsContent, $matches) && ! empty($matches)
+        ) {
+            foreach ($matches[0] as $matchIndex => $matchRow) {
+                $jsContent = str_replace(
+                    $matchRow,
+                    'src=' . $matches['startDel'][$matchIndex] . $matches['endDel'][$matchIndex] . '/* Stripped by ' . WPACU_PLUGIN_TITLE . ' */',
+                    $jsContent
+                );
+            }
+        }
 
 		$webFontConfigReferenceTwo = '#("|\')((http:|https:|)//fonts.googleapis.com/(.*?))("|\')#si';
-
 		if (preg_match($webFontConfigReferenceTwo, $jsContent)) {
 			$jsContent = preg_replace($webFontConfigReferenceTwo, '\\1\\5', $jsContent);
 		}
+
+        /*
+            WebFont.load({
+                google: {
+                    families: [
+                        'Oswald:400,400italic',
+                        'Heebo:400,400italic'
+                    ]
+                }
+            });
+         */
+        $webFontConfigReferenceThree = '#WebFont\.load(.*?)(google(.*?)\{(.*?)families(\s+|):(\s+|)\[(.*?)](\s+)})#si';
+        if (preg_match($webFontConfigReferenceThree, $jsContent)) {
+            preg_match_all($webFontConfigReferenceThree, $jsContent, $matches);
+            if (isset($matches[2][0]) && $matches[2][0]) {
+                $jsContent = str_replace($matches[2][0], '', $jsContent);
+            }
+        }
+
+        /*
+            WebFontConfig = {
+                google: {
+                    families: [
+                        'Roboto',
+                        'Open Sans:300,300italic'
+                    ]
+                },
+                custom: {}
+            }
+         */
+        $webFontConfigReferenceFour = '#WebFontConfig(\s+)=(\s+){(.*?)(google(.*?)\{(.*?)families(\s+|):(\s+|)\[(.*?)](\s+)}(\s+|)(,|))#si';
+        if (preg_match($webFontConfigReferenceFour, $jsContent)) {
+            preg_match_all($webFontConfigReferenceFour, $jsContent, $matches);
+            if (isset($matches[4][0]) && $matches[4][0]) {
+                $jsContent = str_replace($matches[4][0], '', $jsContent);
+            }
+        }
 
 		return $jsContent;
 	}
@@ -229,6 +265,6 @@ class FontsGoogleRemove
 	 */
 	public static function preventAnyChange()
 	{
-		return defined( 'WPACU_ALLOW_ONLY_UNLOAD_RULES' ) && WPACU_ALLOW_ONLY_UNLOAD_RULES;
+		return wpacuIsDefinedConstant( 'WPACU_ALLOW_ONLY_UNLOAD_RULES' );
 	}
 }

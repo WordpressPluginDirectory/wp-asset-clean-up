@@ -1,8 +1,9 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp\OptimiseAssets;
 
 use WpAssetCleanUp\Main;
-use WpAssetCleanUp\Menu;
 use WpAssetCleanUp\FileSystem;
 use WpAssetCleanUp\Misc;
 use WpAssetCleanUp\ObjectCache;
@@ -23,14 +24,11 @@ class CombineCss
 	 * @param $htmlSource
 	 *
 	 * @return mixed
-	 */
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public static function doCombine($htmlSource)
 	{
 		if ( ! Misc::isDOMDocumentOn() ) {
-			return $htmlSource;
-		}
-
-		if ( ! self::proceedWithCssCombine() ) {
 			return $htmlSource;
 		}
 
@@ -40,11 +38,11 @@ class CombineCss
 		$storageJsonContents = array();
 		$skipCache = false; // default
 
-		if (isset($_GET['wpacu_no_cache']) || (defined('WPACU_NO_CACHE') && WPACU_NO_CACHE === true)) {
+		if (isset($_GET['wpacu_no_cache']) || wpacuIsDefinedConstant('WPACU_NO_CACHE')) {
 			$skipCache = true;
 		}
 
-		// If cache is not skipped, read the information from the cache as it's much faster
+		// If the cache is not skipped, read the information from the cache as it's much faster
 		if (! $skipCache) {
 			// Speed up processing by getting the already existing final CSS file URI
 			// This will avoid parsing the HTML DOM and determine the combined URI paths for all the CSS files
@@ -98,7 +96,8 @@ class CombineCss
 						}
 
 						// Check if the CSS file has any 'data-wpacu-skip' attribute; if it does, do not alter it
-						if (isset($linkAttributes['data-wpacu-skip']) || isset($scriptAttributes['data-wpacu-apply-media-query'])) {
+						if (isset($linkAttributes['data-wpacu-skip'])
+                        ) {
 							continue;
 						}
 
@@ -189,22 +188,34 @@ class CombineCss
 					// URI (e.g. /wp-content/cache/asset-cleanup/[file-name-here.css]) to the combined CSS file
 					$uriToFinalCssFile = $maybeDoCssCombine['uri_final_css_file'];
 
-					// Any link hrefs removed perhaps if the file wasn't combined?
+					// Any link hrefs removed, perhaps if the file wasn't combined?
 					$linkHrefs = $maybeDoCssCombine['link_hrefs'];
 
 					if (is_file($localFinalCssFile)) {
-						$storageJsonContents[$docLocationTag][$mediaValue] = array(
+                        foreach ($linkHrefs as $originalIndexKey => $href) {
+                            $indexKey = $originalIndexKey; // default
+
+                            if (strpos($href, OptimizeCommon::getRelPathPluginCacheDir()) === false) {
+                                $localFilePath = OptimizeCommon::getLocalAssetPath($href, 'css');
+
+                                // Unique Mark: SHA1 of the file contents + a unique ID (in rare cases when a different file has the same content)
+                                $indexKey      = sha1_file($localFilePath) . '_'. uniqid('', true);
+                            }
+
+                            $href = str_replace('{site_url}', '', OptimizeCommon::getSourceRelPath($href, true));
+
+                            unset($linkHrefs[$originalIndexKey]);
+                            $linkHrefs[$indexKey] = $href;
+                        }
+
+                        $storageJsonContents[$docLocationTag][$mediaValue] = array(
 							'uri_to_final_css_file' => $uriToFinalCssFile,
-							'link_hrefs'            => array_map(static function($href) {
-								return str_replace('{site_url}', '', OptimizeCommon::getSourceRelPath($href));
-							}, $linkHrefs)
+							'link_hrefs'            => $linkHrefs
 						);
 
 						$storageJsonContentsToSave[$docLocationTag][$mediaValue] = array(
 							'uri_to_final_css_file' => $uriToFinalCssFile,
-							'link_hrefs'            => array_map(static function($href) {
-								return OptimizeCommon::getSourceRelPath($href);
-							}, $linkHrefs)
+							'link_hrefs'            => $linkHrefs
 						);
 					}
 				}
@@ -227,8 +238,8 @@ class CombineCss
 				$groupLocation = 1;
 
 				foreach ($mediaValues as $mediaValue => $storageJsonContentLocation) {
-					if (! isset($storageJsonContentLocation['link_hrefs'][0])) {
-						continue;
+					if (empty($storageJsonContentLocation['link_hrefs'])) {
+                        continue;
 					}
 
 					// Irrelevant to have only one CSS file in a combine CSS group
@@ -244,16 +255,16 @@ class CombineCss
 
 					$finalCssTagAttrs = array();
 
-					if (strpos($mediaValue, 'wpacu_preload_basic_') === 0) {
+                    if (strncmp($mediaValue, 'wpacu_preload_basic_', 20) === 0) {
 						// Put the right "media" value after cleaning the reference
 						$mediaValueClean = str_replace('wpacu_preload_basic_', '', $mediaValue);
 
 						// Basic Preload
 						$finalCssTag = <<<HTML
-<link rel='stylesheet' data-wpacu-to-be-preloaded-basic='1' id='wpacu-combined-css-{$docLocationTag}-{$groupLocation}-preload-it-basic' href='{$finalTagUrl}' type='text/css' media='{$mediaValueClean}' />
+<link rel='stylesheet' data-wpacu-to-be-preloaded-basic='1' id='wpacu-combined-css-{$docLocationTag}-{$groupLocation}-stylesheet' href='{$finalTagUrl}' type='text/css' media='{$mediaValueClean}' />
 HTML;
 						$finalCssTagRelPreload = <<<HTML
-<link rel='preload' as='style' data-wpacu-preload-it-basic='1' id='wpacu-combined-css-{$docLocationTag}-{$groupLocation}-preload-it-basic' href='{$finalTagUrl}' type='text/css' media='{$mediaValueClean}' />
+<link rel='preload' as='style' id='wpacu-combined-css-{$docLocationTag}-{$groupLocation}-preload' href='{$finalTagUrl}' type='text/css' media='{$mediaValueClean}' />
 HTML;
 
 						$finalCssTagAttrs['rel']   = 'preload';
@@ -286,8 +297,8 @@ HTML;
 
 					$htmlSourceBeforeAnyLinkTagReplacement = $htmlSource;
 
-					// Detect first LINK tag from the <$locationTag> and replace it with the final combined LINK tag
-					$firstLinkTag = OptimizeCss::getFirstLinkTag($storageJsonContentLocation['link_hrefs'][0], $htmlSource);
+					// Detect the first LINK tag from the <$locationTag> and replace it with the final combined LINK tag
+					$firstLinkTag = OptimizeCss::getFirstLinkTag(reset($storageJsonContentLocation['link_hrefs']), $htmlSource);
 
 					if ($firstLinkTag) {
 						// 1) Strip inline code before/after it (if any)
@@ -302,14 +313,16 @@ HTML;
 							$htmlSource
 						); // Strip the combined files to avoid duplicate code
 
-						// There should be at least two replacements made AND all the tags should have been replaced
+						// There should be at least two replacements made, AND all the tags should have been replaced
 						// Leave no room for errors, otherwise the page could end up with extra files loaded, leading to a slower website
 						if ($htmlSource === 'do_not_combine') {
 							$htmlSource = $htmlSourceBeforeAnyLinkTagReplacement;
 						} else {
 							$groupLocation++;
 						}
-					}
+					} else {
+                        OptimizeCommon::clearAssetCachedData(self::$jsonStorageFile);
+                        }
 				}
 			}
 		}
@@ -329,6 +342,7 @@ HTML;
 		preg_match_all('#<link[^>]*(stylesheet|preload)[^>]*(>)#Umi', $htmlSource, $matchesSourcesFromTags, PREG_SET_ORDER);
 
 		$linkTagsStrippedNo = 0;
+        $clearCombinedCssCache = false;
 
 		foreach ($matchesSourcesFromTags as $matchSourceFromTag) {
 			$matchedSourceFromTag = (isset($matchSourceFromTag[0]) && strip_tags($matchSourceFromTag[0]) === '') ? trim($matchSourceFromTag[0]) : '';
@@ -346,9 +360,22 @@ HTML;
 
 				foreach ($tagObject->attributes as $tagAttrs) {
 					if ($tagAttrs->nodeName === 'href') {
-						$relNodeValue = trim(OptimizeCommon::getSourceRelPath($tagAttrs->nodeValue));
+						$relNodeValue = trim(OptimizeCommon::getSourceRelPath($tagAttrs->nodeValue, true));
 
-						if (in_array($relNodeValue, $filesSources)) {
+                        $indexKey = array_search($relNodeValue, $filesSources);
+
+						if ($indexKey !== false) {
+							// Check the SHA1 value of the file if it's in the original location (not within the caching directory)
+                            if (strpos($indexKey, '_') !== false && strpos($relNodeValue, OptimizeCommon::getRelPathPluginCacheDir()) === false) {
+                                list($sha1File) = explode('_', $indexKey);
+
+                                if ($sha1File !== sha1_file(OptimizeCommon::getLocalAssetPath($relNodeValue, 'css'))) {
+                                    // The contents of one of the files from the combined CSS were changed
+                                    $clearCombinedCssCache = true;
+                                    break 3;
+                                }
+                            }
+
 							$htmlSourceBeforeLinkTagReplacement = $htmlSource;
 
 							// 1) Strip inline code before/after it (if any)
@@ -368,8 +395,13 @@ HTML;
 
 		// Aren't all the LINK tags stripped? They should be, otherwise, do not proceed with the HTML alteration (no combining will take place)
 		// Minus the already combined tag
-		if (($linkTagsStrippedNo < 2) && (count($filesSources) !== $linkTagsStrippedNo)) {
-			return 'do_not_combine';
+		if ($clearCombinedCssCache || (($linkTagsStrippedNo < 2) && (count($filesSources) !== $linkTagsStrippedNo))) {
+            // It looks like one or more files are not loading on this page
+            // It means the combined CSS is irrelevant as it should contain fewer files
+            // Clear it, so it will be re-created!
+
+            OptimizeCommon::clearAssetCachedData(self::$jsonStorageFile);
+            return 'do_not_combine';
 		}
 
 		return $htmlSource;
@@ -406,8 +438,6 @@ HTML;
 		}
 
 		foreach ($regExps as $regExp) {
-			$regExp = Misc::purifyRegexValue($regExp);
-
 			if ( @preg_match( $regExp, $href ) || ( strpos($href, $regExp) !== false ) ) {
 				// Skip combination
 				return true;
@@ -424,7 +454,8 @@ HTML;
 	 * @param $docLocationTag
 	 *
 	 * @return array
-	 */
+     * @noinspection NestedAssignmentsUsageInspection
+     */
 	public static function maybeDoCssCombine($localAssetsPaths, $linkHrefs, $localAssetsExtra, $docLocationTag)
 	{
 		// Only combine if $shaOneCombinedUriPaths.css does not exist
@@ -444,7 +475,7 @@ HTML;
 					}
 
 					if (apply_filters('wpacu_print_info_comments_in_cached_assets', true)) {
-						$finalCombinedCssContent .= '/*!' . str_replace( Misc::getWpRootDirPath(), '/', $localAssetsPath ) . "*/\n";
+						$finalCombinedCssContent .= '/*!' . str_replace( Misc::getWpRootDirPathBasedOnPath($localAssetsPath), '/', $localAssetsPath ) . "*/\n";
 					}
 
 					$finalCombinedCssContent .= OptimizeCss::maybeFixCssContent($cssContent, $pathToAssetDir . '/') . "\n";
@@ -453,7 +484,7 @@ HTML;
 				}
 			}
 
-			// Move any @imports to top; This also strips any @imports to Google Fonts if the option is chosen
+			// Move any @imports to the top; This also strips any @imports to Google Fonts if the option is chosen
 			$finalCombinedCssContent = trim(OptimizeCss::importsUpdate($finalCombinedCssContent));
 
 			if (Main::instance()->settings['google_fonts_remove']) {
@@ -491,7 +522,7 @@ HTML;
 	 */
 	public static function appendToCombineCss($localAssetsExtra, $assetHref, $pathToAssetDir, $finalAssetsContents)
 	{
-		if (isset($localAssetsExtra[$assetHref]['after']) && ! empty($localAssetsExtra[$assetHref]['after'])) {
+		if ( ! empty($localAssetsExtra[$assetHref]['after']) ) {
 			$afterCssContent = '';
 
 			foreach ($localAssetsExtra[$assetHref]['after'] as $afterData) {
@@ -552,76 +583,5 @@ HTML;
 			$replaceWith."\n",
 			$htmlSource
 		);
-	}
-
-	/**
-	 * @return bool
-	 */
-	public static function proceedWithCssCombine()
-	{
-		// Not on query string request (debugging purposes)
-		if ( ! empty($_REQUEST) && array_key_exists('wpacu_no_css_combine', $_REQUEST) ) {
-			return false;
-		}
-
-		// No CSS files are combined in the Dashboard
-		// Always in the front-end view
-		// Do not combine if there's a POST request as there could be assets loading conditionally
-		// that might not be needed when the page is accessed without POST, making the final CSS file larger
-		if (! empty($_POST) || is_admin()) {
-			return false; // Do not combine
-		}
-
-		// Only clean request URIs allowed (with Exceptions)
-		// Exceptions
-		if ((strpos($_SERVER['REQUEST_URI'], '?') !== false) && ! OptimizeCommon::loadOptimizedAssetsIfQueryStrings()) {
-			return false;
-		}
-
-		if (! OptimizeCommon::doCombineIsRegularPage()) {
-			return false;
-		}
-
-		$pluginSettings = Main::instance()->settings;
-
-		if ($pluginSettings['test_mode'] && ! Menu::userCanManageAssets()) {
-			return false; // Do not combine anything if "Test Mode" is ON and the user is in guest mode (not logged-in)
-		}
-
-		if ($pluginSettings['combine_loaded_css'] === '') {
-			return false; // Do not combine
-		}
-
-		if (OptimizeCss::isOptimizeCssEnabledByOtherParty('if_enabled')) {
-			return false; // Do not combine (it's already enabled in other plugin)
-		}
-
-		// "Minify HTML" from WP Rocket is sometimes stripping combined LINK tags
-		// Better uncombined then missing essential CSS files
-		if (Misc::isWpRocketMinifyHtmlEnabled()) {
-			return false;
-		}
-
-		/*
-		    // The option is no longer used since v1.1.7.3 (Pro) & v1.3.6.4 (Lite)
-			if ( ($pluginSettings['combine_loaded_css'] === 'for_admin'
-			      || $pluginSettings['combine_loaded_css_for_admin_only'] == 1)
-			     && Menu::userCanManageAssets()) {
-
-				return true; // Do combine
-			}
-		*/
-
-		// "Apply it only for guest visitors (default)" is set; Do not combine if the user is logged in
-		if ( $pluginSettings['combine_loaded_css_for'] === 'guests' && is_user_logged_in() ) {
-			return false;
-		}
-
-		if (in_array($pluginSettings['combine_loaded_css'], array('for_all', 1)) ) {
-			return true; // Do combine
-		}
-
-		// Finally, return false as none of the verification above matched
-		return false;
 	}
 }

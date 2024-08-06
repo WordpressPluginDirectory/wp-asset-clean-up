@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
@@ -11,104 +13,77 @@ use WpAssetCleanUp\OptimiseAssets\OptimizeJs;
 class HardcodedAssets
 {
 	/**
-	 *
-	 */
-	public static function init()
-	{
-		add_action( 'init', static function() {
-			if (Main::instance()->isGetAssetsCall) {
-				// Case 1: An AJAX call is made from the Dashboard
-				self::initBufferingForAjaxCallFromTheDashboard();
-			} elseif (self::useBufferingForEditFrontEndView()) {
-				// Case 2: The logged-in admin manages the assets from the front-end view
-				self::initBufferingForFrontendManagement();
-			}
-		});
-	}
+     * @var string
+     */
+    public static $handleLinkPrefix = 'wpacu_hardcoded_link_';
 
-	/**
-	 *
-	 */
-	public static function initBufferingForAjaxCallFromTheDashboard()
-	{
-		ob_start();
+    /**
+     * @var string
+     */
+    public static $handleNoScriptInlinePrefix = 'wpacu_hardcoded_noscript_inline_';
 
-		add_action('shutdown', static function() {
-			$htmlSource = '';
+    /**
+     * @var string
+     */
+    public static $handleStylePrefix = 'wpacu_hardcoded_style_';
 
-			// We'll need to get the number of ob levels we're in, so that we can iterate over each, collecting
-			// that buffer's output into the final output.
-			$htmlSourceLevel = ob_get_level();
+    /**
+     * @var string
+     */
+    public static $handleScriptSrcPrefix = 'wpacu_hardcoded_script_src_';
 
-			for ($wpacuI = 0; $wpacuI < $htmlSourceLevel; $wpacuI++) {
-				$htmlSource .= ob_get_clean();
-			}
+    /**
+     * @var string
+     */
+    public static $handleScriptInlinePrefix = 'wpacu_hardcoded_script_inline_';
 
-			$anyHardCodedAssets = HardcodedAssets::getAll($htmlSource); // Fetch all for this type of request
-
-			echo str_replace('{wpacu_hardcoded_assets}', $anyHardCodedAssets, $htmlSource);
-		}, 0);
-	}
-
-	/**
-	 *
-	 */
-	public static function initBufferingForFrontendManagement()
-	{
-		// Used to print the hardcoded CSS/JS
-		ob_start();
-
-		add_action('shutdown', static function() {
-			if (! defined('NEXTEND_SMARTSLIDER_3_URL_PATH')) {
-				ob_flush();
-			}
-
-			$htmlSource = '';
-
-			// We'll need to get the number of ob levels we're in, so that we can iterate over each, collecting
-			// that buffer's output into the final output.
-			$htmlSourceLevel = ob_get_level();
-
-			for ($wpacuI = 0; $wpacuI < $htmlSourceLevel; $wpacuI++) {
-				$htmlSource .= ob_get_clean();
-			}
-
-			echo OptimizeCommon::alterHtmlSource($htmlSource);
-
-			}, 0);
-	}
-
-	/**
-	 * @return bool
-	 */
-	public static function useBufferingForEditFrontEndView()
-	{
-		// The logged-in admin needs to be outside the Dashboard (in the front-end view)
-		// "Manage in the Front-end" is enabled in "Settings" -> "Plugin Usage Preferences"
-		return (Main::instance()->frontendShow() && ! is_admin() && Menu::userCanManageAssets() && ! Main::instance()->isGetAssetsCall);
-	}
-
-	/**
+    /**
 	 * @param $htmlSource
-	 * @param bool $encodeIt - if set to "false", it's mostly for testing purposes
-	 *
+     * @param $encodeIt bool - if set to "false", it's mostly for fetching for the CSS/JS manager
+	 * @params string $purpose ("fetch" - show the list in the CSS/JS manager or retrieve it all for alteration, "alter" - Fetch specific data)
+     * @params array $anyHardCodedRules - useful to fetch only what's needed to save resources (usually when "alter" is used as the $purpose, unless debugging is done)
+     *
 	 * @return string|array
-	 */
-	public static function getAll($htmlSource, $encodeIt = true)
-	{
-		$htmlSourceAlt = CleanUp::removeHtmlComments($htmlSource, true);
+     *
+     * @noinspection NestedAssignmentsUsageInspection
+     * @noinspection ParameterDefaultValueIsNotNullInspection
+     */
+	public static function getAll($htmlSource, $encodeIt = true, $purpose = 'fetch', $toFetch = array()
+    ) {
+        $stickToRegEx = true;
 
-		$collectLinkStyles = true; // default
-		$collectScripts    = true; // default
+        // Default
+        if (empty($toFetch)) {
+            $toFetch = array('wpacu_hardcoded_links', 'wpacu_hardcoded_styles', 'wpacu_hardcoded_scripts_src', 'wpacu_hardcoded_scripts_noscripts_inline');
+        }
 
-		$hardCodedAssets = array(
-			'link_and_style_tags'          => array(), // LINK (rel="stylesheet") & STYLE (inline)
-			'script_nosrc_and_inline_tags' => array(), // SCRIPT (with "src" attribute) & SCRIPT (inline)
+        if ( $purpose === 'fetch' ) {
+            $collectLinkStyles = $collectScripts = true; // fetch only what's needed
+        }
+
+        $htmlSourceAlt = $htmlSource;
+
+        if ( $purpose === 'fetch' ) {
+            // It's relevant when all hardcoded assets are retrieved (e.g. to show in the CSS/JS manager list)
+            $htmlSourceAlt = CleanUp::removeHtmlComments($htmlSource, true);
+        }
+
+        $hardCodedAssets = array(
+			'link_and_style_tags'                           => array(), // LINK (rel="stylesheet") & STYLE (inline)
+			'script_src_or_inline_and_noscript_inline_tags' => array(), // SCRIPT (with "src" attribute) & SCRIPT (inline), NOSCRIPT (inline)
 		);
+
+        $hardCodedAssetsBaseKeys = array_keys($hardCodedAssets);
 
 		$matchesSourcesFromTags = array();
 
-		$stickToRegEx = true;
+        if ($collectLinkStyles || $collectScripts) {
+            preg_match_all('#<head[^>]*>(.*?)</head>(.*?)<body#Umsi', $htmlSourceAlt, $matchesContentsInHeadTag);
+            preg_match_all('#<body[^>]*>(.*?)</body#Umsi', $htmlSourceAlt, $matchesContentsInBodyTag);
+            }
+
+        $headTagContent = isset($matchesContentsInHeadTag[1][0]) ? $matchesContentsInHeadTag[1][0] : '';
+        $bodyTagContent = isset($matchesContentsInBodyTag[1][0]) ? $matchesContentsInBodyTag[1][0] : '';
 
 		if ( $collectLinkStyles ) {
 			if ( ! $stickToRegEx && Misc::isDOMDocumentOn() ) {
@@ -169,7 +144,7 @@ class HardcodedAssets
 
 							// It always has to be a match from the DOM generated tag
 							// Otherwise, default it to RegEx
-							if ( empty($matchSourceFromTag) || ! (isset($matchSourceFromTag[0][0]) && ! empty($matchSourceFromTag[0][0])) ) {
+							if ( empty($matchSourceFromTag) || empty( $matchSourceFromTag[0][0] ) ) {
 								$stickToRegEx = true;
 								break;
 							}
@@ -254,7 +229,7 @@ class HardcodedAssets
 
 							// It always has to be a match from the DOM generated tag
 							// Otherwise, default it to RegEx
-							if ( empty($matchSourceFromTagTwo) || ! (isset($matchSourceFromTagTwo[0][0]) && ! empty($matchSourceFromTagTwo[0][0])) ) {
+							if ( empty($matchSourceFromTagTwo) || empty( $matchSourceFromTagTwo[0][0] ) ) {
 								$stickToRegEx = true;
 								break;
 							}
@@ -275,11 +250,23 @@ class HardcodedAssets
 			* [START] Collect Hardcoded LINK (stylesheet) & STYLE tags
 			*/
 			if ($stickToRegEx || ! Misc::isDOMDocumentOn()) {
+                $regExp = '#(?=(?P<link_tag><link[^>]*stylesheet[^>]*(>)))|(?=(?P<style_tag><style[^>]*?>.*</style>))#Umsi'; // default
+
+                if ($purpose === 'alter') {
+                    if (in_array('wpacu_hardcoded_links', $toFetch) && ! in_array('wpacu_hardcoded_styles', $toFetch)) {
+                        $regExp = '#(?=(?P<link_tag><link[^>]*stylesheet[^>]*(>)))#Umi';
+                    }
+
+                    if (in_array('wpacu_hardcoded_styles', $toFetch) && ! in_array('wpacu_hardcoded_links', $toFetch)) {
+                        $regExp = '#(?=(?P<style_tag><style[^>]*?>.*</style>))#Umsi';
+                    }
+                }
+
 				preg_match_all(
-					'#(?=(?P<link_tag><link[^>]*stylesheet[^>]*(>)))|(?=(?P<style_tag><style[^>]*?>.*</style>))#Umsi',
+                    $regExp,
 					$htmlSourceAlt,
 					$matchesSourcesFromTags,
-					PREG_SET_ORDER
+                    PREG_SET_ORDER|PREG_OFFSET_CAPTURE
 				);
 			}
 
@@ -295,7 +282,7 @@ class HardcodedAssets
 				);
 
 				// Sometimes, the hash checking might fail (if there's a small change to the JS content)
-				// Consider using a fallback verification by checking the actual content
+				// Consider using fallback verification by checking the actual content
 				$stripsSpecificStylesContaining = array(
 					'<style media="print">#wpadminbar { display:none; }</style>',
 					'id="edd-store-menu-styling"',
@@ -304,8 +291,8 @@ class HardcodedAssets
 
 				foreach ( $matchesSourcesFromTags as $matchedTag ) {
 					// LINK "stylesheet" tags (if any)
-					if ( isset( $matchedTag['link_tag'] ) && trim( $matchedTag['link_tag'] ) !== '' && ( trim( strip_tags( $matchedTag['link_tag'] ) ) === '' ) ) {
-						$matchedTagOutput = trim( $matchedTag['link_tag'] );
+					if ( isset( $matchedTag['link_tag'][0], $matchedTag['link_tag'][1] ) && trim( $matchedTag['link_tag'][0] ) !== '' && ( trim( strip_tags( $matchedTag['link_tag'][0] ) ) === '' ) ) {
+						$matchedTagOutput = trim( $matchedTag['link_tag'][0] );
 
 						// Own plugin assets and enqueued ones since they aren't hardcoded
 						if (self::skipTagIfNotRelevant($matchedTagOutput)) {
@@ -313,39 +300,43 @@ class HardcodedAssets
 						}
 
 						$hardCodedAssets['link_and_style_tags'][] = $matchedTagOutput;
+                        $hardCodedAssets['offset']['link_and_style_tags'][] = $matchedTag['link_tag'][1];
 					}
 
 					// STYLE inline tags (if any)
-					if ( isset( $matchedTag['style_tag'] ) && trim( $matchedTag['style_tag'] ) !== '' ) {
-						$matchedTagOutput = trim( $matchedTag['style_tag'] );
+					if ( isset( $matchedTag['style_tag'][0], $matchedTag['style_tag'][1] ) && trim( $matchedTag['style_tag'][0] ) !== '' ) {
+						$matchedTagOutput = trim( $matchedTag['style_tag'][0] );
 
-						/*
-						 * Strip certain STYLE tags irrelevant for the list (e.g. related to the WordPress Admin Bar, etc.)
-						*/
-						if ( in_array( self::determineHardcodedAssetSha1( $matchedTagOutput ), $stripsSpecificStylesHashes ) ) {
-							continue;
-						}
+                        if ($purpose === 'fetch') {
+                            /*
+                             * Strip certain STYLE tags irrelevant for the list (e.g., related to the WordPress Admin Bar, etc.)
+                            */
+                            if (in_array(self::determineHardcodedAssetSha1($matchedTagOutput),
+                                $stripsSpecificStylesHashes)) {
+                                continue;
+                            }
 
-						foreach ( $stripsSpecificStylesContaining as $cssContentTargeted ) {
-							if ( strpos( $matchedTagOutput, $cssContentTargeted ) !== false ) {
-								continue 2; // applies for this "foreach": ($matchesSourcesFromTags as $matchedTag)
-							}
-						}
+                            foreach ($stripsSpecificStylesContaining as $cssContentTargeted) {
+                                if (strpos($matchedTagOutput, $cssContentTargeted) !== false) {
+                                    continue 2; // applies for this "foreach": ($matchesSourcesFromTags as $matchedTag)
+                                }
+                            }
 
-						// Own plugin assets and enqueued ones since they aren't hardcoded
-						if (self::skipTagIfNotRelevant($matchedTagOutput)) {
-							continue;
-						}
+                            // Own plugin assets and enqueued ones since they aren't hardcoded
+                            if (self::skipTagIfNotRelevant($matchedTagOutput)) {
+                                continue;
+                            }
 
-						foreach ( wp_styles()->done as $cssHandle ) {
-							if ( strpos( $matchedTagOutput,
-									'<style id=\'' . trim( $cssHandle ) . '-inline-css\'' ) !== false ) {
-								// Do not consider the STYLE added via WordPress with wp_add_inline_style() as it's not hardcoded
-								continue 2;
-							}
-						}
+                            foreach (wp_styles()->done as $cssHandle) {
+                                if (strpos($matchedTagOutput, '<style id=\'' . trim($cssHandle) . '-inline-css\'') !== false) {
+                                    // Do not consider the STYLE added via WordPress with wp_add_inline_style() as it's not hardcoded
+                                    continue 2;
+                                }
+                            }
+                        }
 
 						$hardCodedAssets['link_and_style_tags'][] = $matchedTagOutput;
+                        $hardCodedAssets['offset']['link_and_style_tags'][] = $matchedTag['style_tag'][1];
 					}
 				}
 			}
@@ -359,42 +350,50 @@ class HardcodedAssets
 			* [START] Collect Hardcoded SCRIPT (src/inline)
 			*/
 			if ($stickToRegEx || ! Misc::isDOMDocumentOn()) {
-				preg_match_all( '@<script[^>]*?>.*?</script>|<noscript[^>]*?>.*?</noscript>@si', $htmlSourceAlt, $matchesScriptTags, PREG_SET_ORDER );
+                $regExp = '@<script[^>]*?>.*?</script>|<noscript[^>]*?>.*?</noscript>@si'; // default
+
+                if ($purpose === 'alter' && in_array('wpacu_hardcoded_scripts_src', $toFetch) && ! in_array('wpacu_hardcoded_scripts_noscripts_inline', $toFetch)) {
+                    $regExp = '@<script[^>]*?>.*?</script>@si';
+                }
+
+				preg_match_all( $regExp, $htmlSourceAlt, $matchesScriptTags, PREG_SET_ORDER|PREG_OFFSET_CAPTURE );
 			} else {
 				$matchesScriptTags = array();
 
 				if (! empty($matchesSourcesFromTags)) {
 					foreach ($matchesSourcesFromTags as $matchedTag) {
-						if (isset($matchedTag['script_noscript_tag']) && $matchedTag['script_noscript_tag']) {
-							$matchesScriptTags[][0] = $matchedTag['script_noscript_tag'];
+						if ( ! empty($matchedTag['script_noscript_tag']) ) {
+							$matchesScriptTags[][0][0] = $matchedTag['script_noscript_tag'];
 						}
 					}
 				}
 			}
 
-			$allInlineAssocWithJsHandle = array();
+            if ($purpose === 'fetch') {
+                $allInlineAssocWithJsHandle = array();
 
-			if ( isset( wp_scripts()->done ) && ! empty( wp_scripts()->done ) ) {
-				foreach ( wp_scripts()->done as $assetHandle ) {
-					// Now, go through the list of inline SCRIPTs associated with an enqueued SCRIPT (with "src" attribute)
-					// And make sure they do not show to the hardcoded list, since they are related to the handle, and they are stripped when the handle is dequeued
-					$anyInlineAssocWithJsHandle = OptimizeJs::getInlineAssociatedWithScriptHandle( $assetHandle, wp_scripts()->registered, 'handle' );
-					if ( ! empty( $anyInlineAssocWithJsHandle ) ) {
-						foreach ( $anyInlineAssocWithJsHandle as $jsInlineTagContent ) {
-							if ( trim( $jsInlineTagContent ) === '' ) {
-								continue;
-							}
+                if ( ! empty(wp_scripts()->done) ) {
+                    foreach ( wp_scripts()->done as $assetHandle ) {
+                        // Now, go through the list of inline SCRIPTs associated with an enqueued SCRIPT (with "src" attribute)
+                        // And make sure they do not show to the hardcoded list, since they are related to the handle, and they are stripped when the handle is dequeued
+                        $anyInlineAssocWithJsHandle = OptimizeJs::getInlineAssociatedWithScriptHandle($assetHandle, wp_scripts()->registered, 'handle');
+                        if ( ! empty($anyInlineAssocWithJsHandle) ) {
+                            foreach ( $anyInlineAssocWithJsHandle as $jsInlineTagContent ) {
+                                if ( trim($jsInlineTagContent) === '' ) {
+                                    continue;
+                                }
 
-							$allInlineAssocWithJsHandle[] = trim($jsInlineTagContent);
-						}
-					}
-				}
+                                $allInlineAssocWithJsHandle[] = trim($jsInlineTagContent);
+                            }
+                        }
+                    }
 
-				$allInlineAssocWithJsHandle = array_unique($allInlineAssocWithJsHandle);
-				}
+                    $allInlineAssocWithJsHandle = array_unique($allInlineAssocWithJsHandle);
+                    }
+            }
 
 			// Go through the hardcoded SCRIPT tags
-			if ( isset( $matchesScriptTags ) && ! empty( $matchesScriptTags ) ) {
+			if ( ! empty( $matchesScriptTags ) ) {
 				// Only the hashes are set
 				// For instance, 'd1eae32c4e99d24573042dfbb71f5258a86e2a8e' is the hash for the following script:
 				/*
@@ -414,7 +413,7 @@ class HardcodedAssets
 				);
 
 				// Sometimes, the hash checking might fail (if there's a small change to the JS content)
-				// Consider using a fallback verification by checking the actual content
+				// Consider using fallback verification by checking the actual content
 				$stripsSpecificScriptsContaining = array(
 					'// The customizer requires postMessage and CORS (if the site is cross domain)',
 					'b[c] += ( window.postMessage && request ? \' \' : \' no-\' ) + cs;',
@@ -424,29 +423,33 @@ class HardcodedAssets
 				);
 
 				foreach ( $matchesScriptTags as $matchedTag ) {
-					if ( isset( $matchedTag[0] ) && $matchedTag[0]
-					     && (stripos( $matchedTag[0], '<script' ) === 0 || stripos( $matchedTag[0], '<noscript' ) === 0) ) {
-						$matchedTagOutput = trim( $matchedTag[0] );
+					if ( isset( $matchedTag[0][0], $matchedTag[0][1] ) && $matchedTag[0][0]
+					     && (strncasecmp($matchedTag[0][0], '<script', 7) === 0 || strncasecmp($matchedTag[0][0],
+                                '<noscript', 9) === 0) ) {
+						$matchedTagOutput = trim( $matchedTag[0][0] );
 
 						// Own plugin assets and enqueued ones since they aren't hardcoded
-						if (self::skipTagIfNotRelevant($matchedTagOutput, 'whole_tag', 'js', array('all_inline_assoc_with_js_handle' => $allInlineAssocWithJsHandle))) {
+						if ($purpose === 'fetch' && self::skipTagIfNotRelevant($matchedTagOutput, 'whole_tag', 'js', array('all_inline_assoc_with_js_handle' => $allInlineAssocWithJsHandle))) {
 							continue;
 						}
 
-						/*
-						 * Strip certain SCRIPT tags irrelevant for the list (e.g. related to WordPress Customiser, Admin Bar, etc.)
-						*/
-						if ( in_array( self::determineHardcodedAssetSha1( $matchedTagOutput ), $stripsSpecificScriptsHashes ) ) {
-							continue;
-						}
+                        if ($purpose === 'fetch') {
+                            /*
+                             * Strip certain SCRIPT tags irrelevant for the list (e.g. related to WordPress Customiser, Admin Bar, etc.)
+                            */
+                            if ( in_array( self::determineHardcodedAssetSha1( $matchedTagOutput ), $stripsSpecificScriptsHashes ) ) {
+                                continue;
+                            }
 
-						foreach ( $stripsSpecificScriptsContaining as $jsContentTargeted ) {
-							if ( strpos( $matchedTagOutput, $jsContentTargeted ) !== false ) {
-								continue 2; // applies for this "foreach": ($matchesScriptTags as $matchedTag)
-							}
-						}
+                            foreach ( $stripsSpecificScriptsContaining as $jsContentTargeted ) {
+                                if ( strpos( $matchedTagOutput, $jsContentTargeted ) !== false ) {
+                                    continue 2; // applies for this "foreach": ($matchesScriptTags as $matchedTag)
+                                }
+                            }
+                        }
 
-						$hardCodedAssets['script_src_or_inline_and_noscript_inline_tags'][] = trim( $matchedTag[0] );
+						$hardCodedAssets['script_src_or_inline_and_noscript_inline_tags'][] = $matchedTagOutput;
+                        $hardCodedAssets['offset']['script_src_or_inline_and_noscript_inline_tags'][] = $matchedTag[0][1];
 					}
 				}
 			}
@@ -455,22 +458,31 @@ class HardcodedAssets
 			*/
 		}
 
-		if ($stickToRegEx && ! empty($hardCodedAssets['link_and_style_tags']) && ! empty($hardCodedAssets['script_src_or_inline_and_noscript_inline_tags'])) {
+		if ($purpose === 'fetch' && $stickToRegEx && ! empty($hardCodedAssets['link_and_style_tags']) && ! empty($hardCodedAssets['script_src_or_inline_and_noscript_inline_tags'])) {
 			$hardCodedAssets = self::removeAnyLinkTagsThatMightBeDetectedWithinScriptTags( $hardCodedAssets );
 		}
 
-		$tagsWithinConditionalComments = self::extractHtmlFromConditionalComments( $htmlSourceAlt );
+        foreach ($hardCodedAssetsBaseKeys as $hKey) {
+            if ( ! empty($hardCodedAssets[$hKey])) {
+                foreach ($hardCodedAssets[$hKey] as $tagKey => $matchedTagOutput) {
+                    if (strpos($headTagContent, $matchedTagOutput) !== false) {
+                        $hardCodedAssets['positions'][$hKey]['head'][] = $tagKey;
+                    } elseif (strpos($bodyTagContent, $matchedTagOutput) !== false) {
+                        $hardCodedAssets['positions'][$hKey]['body'][] = $tagKey;
+                    }
+                }
+            }
+        }
 
-		if (Main::instance()->isGetAssetsCall) {
-			// AJAX call within the Dashboard
-			$hardCodedAssets['within_conditional_comments'] = $tagsWithinConditionalComments;
-		}
+		$tagsWithinConditionalComments = self::extractHtmlFromConditionalComments($htmlSourceAlt);
+
+        $hardCodedAssets['within_conditional_comments'] = $tagsWithinConditionalComments;
 
 		if ($encodeIt) {
 			return base64_encode( wp_json_encode( $hardCodedAssets ) );
 		}
 
-		return $hardCodedAssets;
+        return $hardCodedAssets;
 	}
 
 	/**
@@ -480,7 +492,8 @@ class HardcodedAssets
 	 * @param array $extras ('all_inline_assoc_with_js_handle')
 	 *
 	 * @return bool
-	 */
+     * @noinspection ParameterDefaultValueIsNotNullInspection
+     */
 	public static function skipTagIfNotRelevant($value, $via = 'whole_tag', $type = 'css', $extras = array())
 	{
 		if ($via === 'whole_tag') {
@@ -594,6 +607,8 @@ class HardcodedAssets
 	}
 
 	/**
+     * This is a fix in case the RegEx method is used to fetch the hardcoded assets,
+     * and it detects LINK tags within SCRIPT ones, instead of detecting only the proper (independent) ones
 	 *
 	 * @param $hardcodedAssets
 	 *
@@ -605,9 +620,12 @@ class HardcodedAssets
 			if ($cssTag) {
 				foreach ($hardcodedAssets['script_src_or_inline_and_noscript_inline_tags'] as $scriptTag) {
 					if (strpos($scriptTag, $cssTag) !== false) {
-						// e.g. could be '<script>var linkToCss="<link href='[path_to_custom_css_file_here]'>";</script>'
-						unset($hardcodedAssets['link_and_style_tags'][$cssTagIndex]);
-					}
+						// e.g., could be '<script>var linkToCss="<link href='[path_to_custom_css_file_here]'>";</script>'
+                        unset(
+                            $hardcodedAssets['link_and_style_tags'][$cssTagIndex],
+                            $hardcodedAssets['offset']['link_and_style_tags'][$cssTagIndex]
+                        );
+                    }
 				}
 			}
 		}
@@ -624,7 +642,7 @@ class HardcodedAssets
 	{
 		preg_match_all('#<!--\[if(.*?)]>(<!-->|-->|\s|)(.*?)(<!--<!|<!)\[endif]-->#si', $htmlSource, $matchedContent);
 
-		if (isset($matchedContent[1], $matchedContent[3]) && ! empty($matchedContent[1]) && ! empty($matchedContent[3])) {
+		if ( ! empty($matchedContent[1]) && ! empty($matchedContent[3]) ) {
 			$conditions = array_map('trim', $matchedContent[1]);
 			$tags       = array_map('trim', $matchedContent[3]);
 
@@ -651,43 +669,114 @@ class HardcodedAssets
 
 		$targetedTag = trim($targetedTag);
 
-		foreach ($contentWithinConditionalComments['tags'] as $tagIndex => $tagFromList) {
-			$tagFromList = trim($tagFromList);
-
-			if ($targetedTag === $tagFromList || strpos($targetedTag, $tagFromList) !== false) {
-				return $contentWithinConditionalComments['conditions'][$tagIndex]; // Stops here and returns the condition
-			}
-		}
+        if (in_array($targetedTag, $contentWithinConditionalComments['tags'])) {
+            $tagIndex = array_search($targetedTag, $contentWithinConditionalComments['tags']);
+            return $contentWithinConditionalComments['conditions'][$tagIndex];
+        }
 
 		return false; // Not within a conditional comment (most cases)
 	}
 
+    /**
+     * @param $targetedTag
+     * @param $tagIndexNo
+     * @param $allPositionsFromTagGroup
+     *
+     * @return string
+     */
+    public static function getTagPositionHeadOrBody($tagIndexNo, $allPositionsFromTagGroup)
+    {
+        if (isset($allPositionsFromTagGroup['head']) && in_array($tagIndexNo, $allPositionsFromTagGroup['head'])) {
+            return 'head';
+        }
+
+        if (isset($allPositionsFromTagGroup['body']) && in_array($tagIndexNo, $allPositionsFromTagGroup['body'])) {
+            return 'body';
+        }
+
+        return '';
+    }
+
 	/**
 	 * @param $htmlTag
 	 *
-	 * @return bool|string
+	 * @return bool|array
 	 */
 	public static function belongsTo($htmlTag)
 	{
-		$belongList = array(
-			'wpcf7recaptcha.' => '"Contact Form 7" plugin',
-			'c = c.replace(/woocommerce-no-js/, \'woocommerce-js\');' => '"WooCommerce" plugin',
-			'.woocommerce-product-gallery{ opacity: 1 !important; }'  => '"WooCommerce" plugin',
-			'-ss-slider-3' => '"Smart Slider 3" plugin',
-			'N2R(["nextend-frontend","smartslider-frontend","smartslider-simple-type-frontend"]' => '"Smart Slider 3" plugin',
-			'function setREVStartSize' => '"Slider Revolution" plugin',
-			'jQuery(\'.rev_slider_wrapper\')' => '"Slider Revolution" plugin',
-			'jQuery(\'#wp-admin-bar-revslider-default' => '"Slider Revolution" plugin'
-		);
+        $belongList = array(
+            'wpcf7recaptcha.'                                                                    => array(
+                'text' => '"Contact Form 7" plugin',
+                'dir'  => 'contact-form-7'
+            ),
+            'c = c.replace(/woocommerce-no-js/, \'woocommerce-js\');'                            => array(
+                'text' => '"WooCommerce" plugin',
+                'dir'  => 'woocommerce'
+            ),
+            '.woocommerce-product-gallery{ opacity: 1 !important; }'                             => array(
+                'text' => '"WooCommerce" plugin',
+                'dir'  => 'woocommerce'
+            ),
+            '-ss-slider-3'                                                                       => array(
+                'text' => '"Smart Slider 3" plugin',
+                'dir'  => 'smart-slider-3'
+            ),
+            'N2R(["nextend-frontend","smartslider-frontend","smartslider-simple-type-frontend"]' => array(
+                'text' => '"Smart Slider 3" plugin',
+                'dir'  => 'smart-slider-3'
+            ),
+            'function setREVStartSize'                                                           => array(
+                'text' => '"Smart Slider 3" plugin',
+                'dir'  => 'smart-slider-3'
+            ),
+            'jQuery(\'.rev_slider_wrapper\')'                                                    => array(
+                'text' => '"Smart Slider 3" plugin',
+                'dir'  => 'smart-slider-3'
+            ),
+            'jQuery(\'#wp-admin-bar-revslider-default'                                           => array(
+                'text' => '"Smart Slider 3" plugin',
+                'dir'  => 'smart-slider-3'
+            ),
+        );
 
-		foreach ($belongList as $ifContains => $isFromSource) {
+		foreach ($belongList as $ifContains => $isFromSourceArray) {
 			if ( strpos( $htmlTag, $ifContains) !== false ) {
-				return $isFromSource;
+				return $isFromSourceArray;
 			}
 		}
 
 		return false;
 	}
+
+    /**
+     * @param $settings
+     *
+     * @return string
+     */
+    public static function viewHardcodedModeLayout($settings)
+    {
+        $l = $settings['assets_list_layout'];
+
+        if ($l === 'by-location') {
+            $viewHardcodedMode = 'by-location';
+        } elseif ($l === 'by-position') {
+            $viewHardcodedMode = 'by-position';
+        } elseif ($l === 'by-preload') {
+            $viewHardcodedMode = 'by-preload';
+        } elseif ($l === 'by-rules') {
+            $viewHardcodedMode = 'by-rules';
+        } elseif ($l === 'by-loaded-unloaded') {
+            $viewHardcodedMode = 'by-loaded-unloaded';
+        } elseif ($l === 'by-size') {
+            $viewHardcodedMode = 'by-size';
+        } elseif ($l === 'all') {
+            $viewHardcodedMode = 'all';
+        } else {
+            $viewHardcodedMode = 'default';
+        }
+
+        return $viewHardcodedMode;
+    }
 
 	/**
 	 * @param $tagOutput
@@ -700,15 +789,13 @@ class HardcodedAssets
 		// Only hash the actual path to the file
 		// In case the tag changes (e.g. an attribute will be added), the tag will be considered the same for the plugin rules
 		// To avoid the rules from not working  / e.g. the file could have a dynamic "?ver=" at the end
-		if ( ! (stripos($tagOutput, '<link') !== false || stripos($tagOutput, '<style') !== false
-		        || stripos($tagOutput, '<script') !== false || stripos($tagOutput, '<noscript') !== false) ) {
+		if ( !  (stripos($tagOutput, '<link') !== false   || stripos($tagOutput, '<style') !== false
+		      || stripos($tagOutput, '<script') !== false || stripos($tagOutput, '<noscript') !== false) ) {
 			return sha1( $tagOutput ); // default
 		}
 
-		$isLinkWithHref  = (stripos($tagOutput, '<link')   !== false) && preg_match('#href(\s+|)=(\s+|)(["\'])(.*)(["\'])#Usmi', $tagOutput);
-		$isScriptWithSrc = (stripos($tagOutput, '<script') !== false) && preg_match('#src(\s+|)=(\s+|)(["\'])(.*)(["\'])|src(\s+|)=(\s+|)(.*)(\s+)#Usmi', $tagOutput);
-
-		if ($isLinkWithHref || $isScriptWithSrc) {
+		if (Misc::getValueFromTag($tagOutput, 'href', 'dom_with_fallback') ||
+            Misc::getValueFromTag($tagOutput, 'src', 'dom_with_fallback')) {
 			return self::determineHardcodedAssetSha1ForAssetsWithSource($tagOutput);
 		}
 
@@ -723,33 +810,45 @@ class HardcodedAssets
 	 // In case there are STYLE tags and SCRIPT tags without any SRC, make sure to consider only the content of the tag as a reference
 	 // e.g. if the user updates <style type="text/css"> to <style> the tag should be considered the same if the content is the same
 	 // also, do not consider any whitespaces from the beginning and ending of the tag's content
+     * If there are just whitespaces in the content, then the content is not take into account as a unique reference; it will be the whole tag
 	 *
 	 * @param $tagOutput
 	 *
 	 * @return string
 	 */
 	public static function determineHardcodedAssetSha1ForAssetsWithoutSource($tagOutput)
-	{
+    {
+        $contentInsideTag = ''; // default
+
 		if (stripos($tagOutput, '<style') !== false) {
 			preg_match_all('@(<style[^>]*?>)(.*?)</style>@si', $tagOutput, $matches);
 
 			if (isset($matches[0][0], $matches[2][0]) && strlen($tagOutput) === strlen($matches[0][0])) {
-				return sha1( trim($matches[2][0]) ); // the hashed content of the STYLE tag
+                $contentInsideTag = $matches[2][0];
 			}
 		} elseif (stripos($tagOutput, '<script') !== false) {
 			preg_match_all('@(<script[^>]*?>)(.*?)</script>@si', $tagOutput, $matches);
 
 			if (isset($matches[0][0], $matches[2][0]) && strlen($tagOutput) === strlen($matches[0][0])) {
-				return sha1( trim($matches[2][0]) ); // the hashed content of the SCRIPT tag
-			}
+                $contentInsideTag = $matches[2][0];
+            }
 		} elseif (stripos($tagOutput, '<noscript') !== false) {
 			preg_match_all('@(<noscript[^>]*?>)(.*?)</noscript>@si', $tagOutput, $matches);
 
 			if (isset($matches[0][0], $matches[2][0]) && strlen($tagOutput) === strlen($matches[0][0])) {
-				return sha1( trim($matches[2][0]) ); // the hashed content of the NOSCRIPT tag
+                $contentInsideTag = $matches[2][0];
 			}
 		}
 
+        // e.g. <script id="value-here">alert('demo');</script> will be treated THE SAME as <script>alert('demo');</script>
+        // e.g. <script id="value-here-2"></script> will be treated AS A DIFFERENT tag from <script></script> (they have empty content, but different attributes)
+
+        if (trim($contentInsideTag)) {
+            // there's content there (excluding the whitespace), thus use it as the unique reference for this type of tag
+            return sha1($contentInsideTag);
+        }
+
+        // The tag doesn't have any valid content (e.g. just whitespace), thus make the uniqueness from the whole tag
 		return sha1($tagOutput);
 	}
 
@@ -776,7 +875,8 @@ class HardcodedAssets
 	 */
 	public static function getRelSourceFromTagOutputForReference($tagOutput)
 	{
-		if (stripos($tagOutput, 'href') !== false && stripos($tagOutput, 'stylesheet') !== false && stripos(trim($tagOutput), '<link') === 0) {
+		if (stripos($tagOutput, 'href') !== false && stripos($tagOutput, 'stylesheet') !== false && strncasecmp(trim($tagOutput),
+                '<link', 5) === 0) {
 			$attrToGet  = 'href';
 			$extToCheck = 'css';
 		} else {
@@ -784,7 +884,7 @@ class HardcodedAssets
 			$extToCheck = 'js';
 		}
 
-		$sourceValue = Misc::getValueFromTag($tagOutput, $attrToGet);
+		$sourceValue = Misc::getValueFromTag($tagOutput, $attrToGet, 'dom_with_fallback');
 
 		if (! $sourceValue) {
 			return false;
@@ -808,7 +908,7 @@ class HardcodedAssets
 				}
 			} else {
 				$finalCleanSource = str_ireplace( array( 'http://', 'https://' ), '', $finalCleanSource );
-				$finalCleanSource = ( strpos( $finalCleanSource, '//' ) === 0 ) ? substr( $finalCleanSource, 2 ) : $finalCleanSource; // if the string starts with '//', remove it
+				$finalCleanSource = (strncmp($finalCleanSource, '//', 2) === 0 ) ? substr( $finalCleanSource, 2 ) : $finalCleanSource; // if the string starts with '//', remove it
 			}
 		}
 
@@ -829,13 +929,13 @@ class HardcodedAssets
 
 		$currentHardcodedAssetRules = '';
 
-		// When the form is submitted it will clear some values if they are not sent anymore which can happen with a failed AJAX call to retrieve the list of hardcoded assets
+		// When the form is submitted, it will clear some values if they are not sent anymore which can happen with a failed AJAX call to retrieve the list of hardcoded assets
 		// Place the current values to the area in case the AJAX call fails, and it won't print the list
 		// If the user presses "Update", it won't clear any existing rules
 		// If the list is printed, obviously it will be with all the fields in place as they should be
 		foreach (array('current_unloaded_page_level', 'load_exceptions', 'handle_unload_regex', 'handle_load_regex', 'handle_load_logged_in') as $ruleKey) {
 			foreach ( array( 'styles', 'scripts' ) as $assetType ) {
-				if ( isset( $dataSettingsFrontEnd[$ruleKey][ $assetType ] ) && ! empty( $dataSettingsFrontEnd[$ruleKey][$assetType] ) ) {
+				if ( ! empty( $dataSettingsFrontEnd[$ruleKey][$assetType] ) ) {
 					// Go through the values, depending on how the array is structured
 					// handle_unload_regex, handle_load_regex
 					if (in_array($ruleKey, array('handle_unload_regex', 'handle_load_regex'))) {
@@ -872,12 +972,40 @@ class HardcodedAssets
 			}
 		}
 
-		return '<div class="wpacu-assets-collapsible-wrap wpacu-wrap-area wpacu-hardcoded" id="wpacu-assets-collapsible-wrap-hardcoded-list" data-wpacu-settings-frontend="'.esc_attr($dataWpacuSettingsFrontend).'">
+        $appendClass = $dataSettingsFrontEnd['plugin_settings']['assets_list_layout'] === 'by-location' ? 'wpacu-by-location' : '';
+
+		return '<div class="wpacu-assets-collapsible-wrap wpacu-wrap-area '.$appendClass.' wpacu-hardcoded" id="wpacu-assets-collapsible-wrap-hardcoded-list" data-wpacu-settings-frontend="'.esc_attr($dataWpacuSettingsFrontend).'">
     <a class="wpacu-assets-collapsible wpacu-assets-collapsible-active" href="#" style="padding: 15px 15px 15px 44px;"><span class="dashicons dashicons-code-standards"></span> Hardcoded (non-enqueued) Styles &amp; Scripts</a>
     <div class="wpacu-assets-collapsible-content" style="max-height: inherit;">
-        <div style="padding: 20px 0; margin: 0;"><img src="'.esc_url(admin_url('images/spinner.gif')).'" align="top" width="20" height="20" alt="" /> The list of hardcoded assets is fetched... Please wait...</div>
+        <div style="padding: 20px 15px; margin: 0;"><img style="margin: 0;" src="'.esc_url(admin_url('images/spinner.gif')).'" align="top" width="20" height="20" alt="" />&nbsp; The list of hardcoded assets is fetched... Please wait...</div>
         '.wp_kses($currentHardcodedAssetRules, array('input' => array('type' => array(), 'name' => array(), 'value' => array()))).'
     </div>
 </div>';
 	}
+
+    /**
+     * @param $dataRowObj
+     * @param $data
+     * @param $assetType
+     *
+     * @return array
+     */
+    public static function wpacuGenerateHardcodedAssetData($dataRowObj, $data, $assetType)
+    {
+        $dataHH = $data;
+
+        $dataHH['row']        = array();
+        $dataHH['row']['obj'] = $dataRowObj;
+
+        $dataHH['row']['class'] = $dataHH['row']['checked'] = ''; // default
+
+        $classPart = ($assetType === 'styles') ? ' style_' : ' script_';
+        $dataHH['row']['class'] .= $classPart . $dataHH['row']['obj']->handle;
+
+        $dataHH['row']['asset_type'] = $assetType;
+
+        $dataHH['row']['is_hardcoded'] = true;
+
+        return $dataHH;
+    }
 }

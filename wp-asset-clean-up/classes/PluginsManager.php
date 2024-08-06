@@ -19,12 +19,12 @@ class PluginsManager
     {
     	// Get active plugins and their basic information
 	    $this->data['active_plugins'] = self::getActivePlugins();
-	    $this->data['plugins_icons']  = Misc::getAllActivePluginsIcons();
+	    $this->data['plugins_icons']  = MiscAdmin::getAllActivePluginsIcons();
 
-	    $wpacuSubPage = (isset($_GET['wpacu_sub_page']) && $_GET['wpacu_sub_page']) ? $_GET['wpacu_sub_page'] : 'manage_plugins_front';
+        $wpacuSubPage = (isset($_GET['wpacu_sub_page']) && $_GET['wpacu_sub_page']) ? $_GET['wpacu_sub_page'] : 'manage_plugins_front';
 	    $this->data['wpacu_sub_page'] = $wpacuSubPage;
 
-	    Main::instance()->parseTemplate('admin-page-plugins-manager', $this->data, true);
+	    MainAdmin::instance()->parseTemplate('admin-page-plugins-manager', $this->data, true);
     }
 
 	/**

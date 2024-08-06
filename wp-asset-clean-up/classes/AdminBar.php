@@ -1,6 +1,8 @@
 <?php
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
+
 /**
  * Class AdminBar
  * @package WpAssetCleanUp
@@ -8,11 +10,15 @@ namespace WpAssetCleanUp;
 class AdminBar
 {
 	/**
-	 *
+	 * This class is called within the WordPress 'init' hook when it's meant to be loaded
 	 */
 	public function __construct()
 	{
-		add_action( 'init', array( $this, 'topBar' ) );
+		// Code for both the Dashboard and the Front-end view
+		add_action('admin_head',     array($this, 'inlineCode'));
+		add_action('wp_head',        array($this, 'inlineCode'));
+
+		add_action('admin_bar_menu', array($this, 'topBarInfo'), 81);
 
 		// Hide top WordPress admin bar on request for debugging purposes and a cleared view of the tested page
 		// This is done in /early-triggers.php within assetCleanUpNoLoad() function
@@ -21,52 +27,93 @@ class AdminBar
 	/**
 	 *
 	 */
-	public function topBar()
+	public function inlineCode()
 	{
-		if (Menu::userCanManageAssets() && (! Main::instance()->settings['hide_from_admin_bar'])) {
-			add_action( 'admin_bar_menu', array( $this, 'topBarInfo' ), 81 );
-		}
+		?>
+		<style <?php echo Misc::getStyleTypeAttribute(); ?> data-wpacu-own-inline-style="true">
+            #wp-admin-bar-assetcleanup-asset-unload-rules-css-default,
+            #wp-admin-bar-assetcleanup-asset-unload-rules-js-default,
+            #wp-admin-bar-assetcleanup-plugin-unload-rules-notice-default {
+                overflow-y: auto;
+                max-height: calc(100vh - 250px);
+            }
+
+            #wp-admin-bar-assetcleanup-parent span.dashicons {
+                width: 15px;
+                height: 15px;
+                font-family: 'Dashicons', Arial, "Times New Roman", "Bitstream Charter", Times, serif !important;
+            }
+
+            #wp-admin-bar-assetcleanup-parent > a:first-child strong {
+                font-weight: bolder;
+                color: #76f203;
+            }
+
+            #wp-admin-bar-assetcleanup-parent > a:first-child:hover {
+                color: #00b9eb;
+            }
+
+            #wp-admin-bar-assetcleanup-parent > a:first-child:hover strong {
+                color: #00b9eb;
+            }
+
+            #wp-admin-bar-assetcleanup-test-mode-info {
+                margin-top: 5px !important;
+                margin-bottom: -8px !important;
+                padding-top: 3px !important;
+                border-top: 1px solid #ffffff52;
+            }
+
+            /* Add some spacing below the last text */
+            #wp-admin-bar-assetcleanup-test-mode-info-2 {
+                padding-bottom: 3px !important;
+            }
+		</style>
+		<?php
 	}
 
 	/**
 	 * @param $wp_admin_bar
-	 */
+     *
+     * @noinspection NestedAssignmentsUsageInspection
+     * */
 	public function topBarInfo($wp_admin_bar)
 	{
 		$topTitle = WPACU_PLUGIN_TITLE;
 
-		$wpacuUnloadedAssetsStatus = false;
+        $anyUnloadedItems = false;
+        $markedCssListForUnload = $markedJsListForUnload = array();
 
 		if (! is_admin()) {
 			$markedCssListForUnload = isset(Main::instance()->allUnloadedAssets['styles'])  ? array_unique(Main::instance()->allUnloadedAssets['styles'])  : array();
 			$markedJsListForUnload  = isset(Main::instance()->allUnloadedAssets['scripts']) ? array_unique(Main::instance()->allUnloadedAssets['scripts']) : array();
 
-			// [wpacu_lite]
-			// Do not print any irrelevant data from the Pro version such as hardcoded CSS/JS
-			$markedCssListForUnload = array_filter($markedCssListForUnload, function($value) {
-				if (strpos($value, 'wpacu_hardcoded_style_') === 0) {
-					return false;
-				}
+            // [wpacu_lite]
+            // Do not print any irrelevant data from the Pro version such as hardcoded CSS/JS
+            $markedCssListForUnload = array_filter($markedCssListForUnload, function ($value) {
+                if (strpos($value, 'wpacu_hardcoded_style_') === 0) {
+                    return false;
+                }
 
-				return $value;
-			});
+                return $value;
+            });
 
-			$markedJsListForUnload = array_filter($markedJsListForUnload, function($value) {
-				if (strpos($value, 'wpacu_hardcoded_script_') === 0) {
-					return false;
-				}
+            $markedJsListForUnload = array_filter($markedJsListForUnload, function ($value) {
+                if (strpos($value, 'wpacu_hardcoded_script_') === 0) {
+                    return false;
+                }
 
-				return $value;
-			});
-			// [/wpacu_lite]
+                return $value;
+            });
+            // [/wpacu_lite]
 
-			$wpacuUnloadedAssetsStatus = (count($markedCssListForUnload) + count($markedJsListForUnload)) > 0;
+            $anyUnloadedItems = (count($markedCssListForUnload) + count($markedJsListForUnload)) > 0;
 		}
 
-		if ($wpacuUnloadedAssetsStatus) {
-			$styleAttrType = Misc::getStyleTypeAttribute();
+		if ($anyUnloadedItems) {
+		$styleAttrType = Misc::getStyleTypeAttribute();
 
-			$cssStyle = <<<HTML
+        $cssStyle = <<<HTML
 <style {$styleAttrType}>
 #wpadminbar .wpacu-alert-sign-top-admin-bar {
     font-size: 20px;
@@ -98,8 +145,6 @@ HTML;
 			$topTitle .= '&nbsp; <span class="dashicons dashicons-admin-tools"></span> <strong>TEST MODE</strong> is <strong>ON</strong>';
 		}
 
-		$goBackToCurrentUrl = '&_wp_http_referer=' . urlencode( wp_unslash( $_SERVER['REQUEST_URI'] ) );
-
 		$wp_admin_bar->add_menu(array(
 			'id'    => 'assetcleanup-parent',
 			'title' => $topTitle,
@@ -113,65 +158,61 @@ HTML;
 			'href'   => esc_url(admin_url( 'admin.php?page=' . WPACU_PLUGIN_ID . '_settings'))
 		));
 
-		$wp_admin_bar->add_menu( array(
+		$wp_admin_bar->add_menu(array(
 			'parent' => 'assetcleanup-parent',
 			'id'     => 'assetcleanup-clear-css-js-files-cache',
 			'title'  => __('Clear CSS/JS Files Cache', 'wp-asset-clean-up'),
-			'href'   => esc_url(wp_nonce_url( admin_url( 'admin-post.php?action=assetcleanup_clear_assets_cache' . $goBackToCurrentUrl ), 'assetcleanup_clear_assets_cache' ))
-		) );
+			'href'   => esc_url(OptimizeCommon::generateClearCachingUrl()),
+            'meta'   => array('class' => 'wpacu-clear-cache-link')
+		));
 
 		// Only trigger in the front-end view
-		if (! is_admin()) {
-			if ( ! Misc::isHomePage() ) {
-				// Not on the home page
-				$homepageManageAssetsHref = Main::instance()->frontendShow()
-					? get_site_url().'#wpacu_wrap_assets'
-					: esc_url(admin_url( 'admin.php?page=' . WPACU_PLUGIN_ID . '_assets_manager&wpacu_for=homepage' ));
+		if ( ! is_admin() ) {
+            $manageAssetsTitle = $manageAssetsHref = false;
 
-				$wp_admin_bar->add_menu(array(
-					'parent' => 'assetcleanup-parent',
-					'id'     => 'assetcleanup-homepage',
-					'title'  => esc_html__('Manage Homepage Assets', 'wp-asset-clean-up'),
-					'href'   => $homepageManageAssetsHref
-				));
-			} else {
-				// On the home page
-				// Front-end view is disabled! Go to Dashboard link
-				if ( ! Main::instance()->frontendShow() ) {
-					$wp_admin_bar->add_menu( array(
-						'parent' => 'assetcleanup-parent',
-						'id'     => 'assetcleanup-homepage',
-						'title'  => esc_html__('Manage Homepage Assets', 'wp-asset-clean-up'),
-						'href'   => esc_url(admin_url('admin.php?page=' . WPACU_PLUGIN_ID . '_assets_manager&wpacu_for=homepage')),
-						'meta'   => array('target' => '_blank')
-					) );
-				}
-			}
-		}
+            if (AssetsManager::instance()->frontendShow()) {
+                $manageAssetsTitle = esc_html__('Manage Current Page Assets', 'wp-asset-clean-up'); // default
+                $manageAssetsHref = '#wpacu_wrap_assets'; // same for all (bottom of the page)
+            }
 
-		if (! is_admin()) {
-			if (Main::instance()->frontendShow()) {
-				$wp_admin_bar->add_menu( array(
-					'parent' => 'assetcleanup-parent',
-					'id'     => 'assetcleanup-jump-to-assets-list',
-					 // language: alias of 'Manage Page Assets'
-					'title'  => esc_html__( 'Manage Current Page Assets', 'wp-asset-clean-up' ) . '&nbsp;<span style="vertical-align: sub;" class="dashicons dashicons-arrow-down-alt"></span>',
-					'href'   => '#wpacu_wrap_assets'
-				) );
-			} elseif (is_singular()) {
-				global $post;
+            if (MainFront::isHomePage()) {
+                $manageAssetsTitle = esc_html__('Manage Current Homepage Assets', 'wp-asset-clean-up');
 
-				if (isset($post->ID)) {
-					$wp_admin_bar->add_menu( array(
-						'parent' => 'assetcleanup-parent',
-						'id'     => 'assetcleanup-manage-page-assets-dashboard',
-						 // language: alias of 'Manage Page Assets'
-						'title'  => esc_html__('Manage Current Page Assets', 'wp-asset-clean-up'),
-						'href'   => esc_url(admin_url('admin.php?page=' . WPACU_PLUGIN_ID . '_assets_manager&wpacu_post_id='.$post->ID)),
-						'meta'   => array('target' => '_blank')
-					) );
-				}
-			}
+                if ( ! $manageAssetsHref ) {
+                    $manageAssetsHref = esc_url(admin_url('admin.php?page=' . WPACU_PLUGIN_ID . '_assets_manager'));
+                }
+            } elseif (MainFront::isSingularPage()) {
+                global $post;
+
+                if ( isset($post->ID) ) {
+                    $manageAssetsTitle = esc_html__('Manage Current Page Assets', 'wp-asset-clean-up');
+
+                    if ( ! $manageAssetsHref ) {
+                        $manageAssetsHref = esc_url(admin_url('admin.php?page=' . WPACU_PLUGIN_ID . '_assets_manager&wpacu_post_id=' . $post->ID));
+                    }
+                }
+            }
+
+            if ($manageAssetsTitle && $manageAssetsHref) {
+                if (AssetsManager::instance()->frontendShow()) {
+                    $wp_admin_bar->add_menu(array(
+                        'parent' => 'assetcleanup-parent',
+                        'id'     => 'assetcleanup-jump-to-assets-list',
+                        // language: alias of 'Manage Page Assets'
+                        'title'  => $manageAssetsTitle . '&nbsp;<span style="vertical-align: sub;" class="dashicons dashicons-arrow-down-alt"></span>',
+                        'href'   => $manageAssetsHref
+                    ));
+                } else {
+                    $wp_admin_bar->add_menu(array(
+                        'parent' => 'assetcleanup-parent',
+                        'id'     => 'assetcleanup-manage-page-assets-dashboard',
+                        // language: alias of 'Manage Page Assets'
+                        'title'  => $manageAssetsTitle,
+                        'href'   => $manageAssetsHref,
+                        'meta'   => array('target' => '_blank')
+                    ));
+                }
+            }
 		}
 
 		$wp_admin_bar->add_menu(array(
@@ -188,6 +229,7 @@ HTML;
 			'href'   => esc_url(admin_url( 'admin.php?page=' . WPACU_PLUGIN_ID . '_overview'))
 		) );
 
+        // [wapcu_lite]
 		$wp_admin_bar->add_menu(array(
 			'parent' => 'assetcleanup-parent',
 			'id'     => 'assetcleanup-support-forum',
@@ -195,6 +237,7 @@ HTML;
 			'href'   => 'https://wordpress.org/support/plugin/wp-asset-clean-up',
 			'meta'   => array('target' => '_blank')
 		));
+        // [/wapcu_lite]
 
 		// [START LISTING UNLOADED ASSETS]
 		if (! is_admin()) { // Frontend view (show any unloaded handles)

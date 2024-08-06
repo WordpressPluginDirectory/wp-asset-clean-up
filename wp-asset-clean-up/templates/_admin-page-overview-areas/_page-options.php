@@ -8,9 +8,9 @@ if (! isset($data)) {
 ?>
 <!-- [Page Options Area] -->
 <?php
-$hasPostsWithOptions = isset($data['page_options_results']['posts']) && ! empty($data['page_options_results']['posts']);
-$hasHomepageWithOptions = isset( $data['page_options_results']['homepage']['options'] ) && ! empty( $data['page_options_results']['homepage']['options'] );
-$hasAtLeastOneRecord = $hasPostsWithOptions || $hasHomepageWithOptions;
+$hasPostsWithOptions    = ! empty($data['page_options_results']['posts']);
+$hasHomepageWithOptions = ! empty( $data['page_options_results']['homepage']['options'] );
+$hasAtLeastOneRecord    = $hasPostsWithOptions || $hasHomepageWithOptions;
 ?>
 <div id="wpacu-page-options-wrap">
     <h3><span class="dashicons dashicons-admin-generic"></span> <?php _e('Page Options', 'wp-asset-clean-up'); ?></h3>

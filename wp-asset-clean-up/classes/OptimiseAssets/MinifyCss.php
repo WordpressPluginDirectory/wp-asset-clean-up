@@ -1,7 +1,10 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp\OptimiseAssets;
 
 use WpAssetCleanUp\Main;
+use WpAssetCleanUp\MainFront;
 use WpAssetCleanUp\Menu;
 use WpAssetCleanUp\MetaBoxes;
 use WpAssetCleanUp\Misc;
@@ -15,18 +18,22 @@ class MinifyCss
 	/**
 	 * @param $cssContent
 	 * @param bool $forInlineStyle
-		 *
+     * *
 	 * @return string
-	 */
+     * @noinspection PhpUnusedParameterInspection*/
 	public static function applyMinification($cssContent, $forInlineStyle = false
 		)
 	{
-		if (class_exists('\MatthiasMullie\Minify\CSS')) {
+		if ( ! class_exists('\MatthiasMullieWpacu\Minify\CSS') ) {
+                require_once WPACU_PLUGIN_DIR . '/vendor/autoload.php';
+            }
+
+			if (class_exists('\MatthiasMullieWpacu\Minify\CSS')) {
 				$sha1OriginalContent = sha1($cssContent);
 				$checkForAlreadyMinifiedShaOne = mb_strlen($cssContent) > 40000;
 
 				// Let's check if the content is already minified
-				// Save resources as the minify process can take time if the content is very large
+				// Save resources as the minifying process can take time if the content is very large
 				// Limit the total number of entries tp 100: if it's more than that, it's likely because there's dynamic JS altering on every page load
 				if ($checkForAlreadyMinifiedShaOne && OptimizeCommon::originalContentIsAlreadyMarkedAsMinified($sha1OriginalContent, 'styles')) {
 					return $cssContent;
@@ -40,7 +47,7 @@ class MinifyCss
 
 				preg_match_all('#--([a-zA-Z0-9_-]+):(\s+)0(em|ex|%|px|cm|mm|in|pt|pc|ch|rem|vh|vw|vmin|vmax|vm)#', $cssContent, $cssVariablesMatches);
 
-				if (isset($cssVariablesMatches[0]) && ! empty($cssVariablesMatches[0])) {
+				if ( ! empty($cssVariablesMatches[0]) ) {
 					$hasVarWithZeroUnit = true;
 
 					foreach ($cssVariablesMatches[0] as $zeroUnitMatch) {
@@ -53,7 +60,7 @@ class MinifyCss
 
 				$multipleOrSpecificCalcMatches = array(); // with multiple calc() or with at least one calc() that contains new lines
 
-				if (isset($cssCalcMatches[0]) && ! empty($cssCalcMatches[0])) {
+				if ( ! empty($cssCalcMatches[0]) ) {
 					foreach ($cssCalcMatches[0] as $cssCalcMatch) {
 						if (substr_count($cssCalcMatch, 'calc') > 1 || strpos($cssCalcMatch, "\n") !== false) {
 							$cssContent = str_replace( $cssCalcMatch, '[wpacu]' . base64_encode( $cssCalcMatch ) . '[/wpacu]', $cssContent );
@@ -64,14 +71,16 @@ class MinifyCss
 
 				// [/CUSTOM BUG FIX]
 
-				$minifier = new \MatthiasMullie\Minify\CSS( $cssContent );
+				$minifier = new \MatthiasMullieWpacu\Minify\CSS();
+                $minifier->setParamType('content');
+                $minifier->add($cssContent);
 
 				if ( $forInlineStyle ) {
-					// If the minification is applied for inlined CSS (within STYLE) leave the background URLs unchanged as it sometimes lead to issues
-					$minifier->setImportExtensions( array() );
-				}
+                    // If the minification is applied for inlined CSS (within STYLE) leave the background URLs unchanged as it sometimes lead to issues
+                    $minifier->setImportExtensions(array());
+                }
 
-				$minifiedContent = trim( $minifier->minify() );
+                $minifiedContent = trim( $minifier->minify() );
 
 				// [CUSTOM BUG FIX]
 				// Restore the original content
@@ -94,7 +103,9 @@ class MinifyCss
 
 				// Is there any [wpacu] left? Hmm, the replacement wasn't alright. Make sure to use the original minified version
 				if (strpos($minifiedContent, '[wpacu]') !== false && strpos($minifiedContent, '[/wpacu]') !== false) {
-					$minifier = new \MatthiasMullie\Minify\CSS( $cssContentBeforeAnyBugChanges );
+					$minifier = new \MatthiasMullieWpacu\Minify\CSS();
+                    $minifier->setParamType('content');
+                    $minifier->add($cssContentBeforeAnyBugChanges);
 
 					if ( $forInlineStyle ) {
 						// If the minification is applied for inlined CSS (within STYLE) leave the background URLs unchanged as it sometimes leads to issues
@@ -125,7 +136,7 @@ class MinifyCss
 	public static function skipMinify($href, $handle = '')
 	{
 		// Things like WP Fastest Cache Toolbar CSS shouldn't be minified and take up space on the server
-		if ($handle !== '' && in_array($handle, Main::instance()->skipAssets['styles'])) {
+		if ($handle !== '' && in_array($handle, MainFront::instance()->getSkipAssets('styles'))) {
 			return true;
 		}
 
@@ -144,10 +155,15 @@ class MinifyCss
 			'#/wp-content/plugins/woocommerce/assets/css/woocommerce.css#',
 			'#/wp-content/plugins/woocommerce/assets/css/woocommerce-smallscreen.css#',
 			'#/wp-content/plugins/woocommerce/assets/css/blocks/style.css#',
-			'#/wp-content/plugins/woocommerce/packages/woocommerce-blocks/build/style.css#',
+
+			// All the files from the "build" directory are already minified
+			'#/woocommerce/packages/woocommerce-blocks/build/#',
 
 			// Google Site Kit: the files are already optimized
 			'#/wp-content/plugins/google-site-kit/#',
+
+			// GiveWP: the files are already optimized
+			'#/wp-content/plugins/give/assets/dist/css/#',
 
 			// Other libraries from the core that end in .min.css
 			'#/wp-includes/css/(.*?).min.css#',
@@ -160,6 +176,9 @@ class MinifyCss
 
 			// Already minified, and it also has a random name making the cache folder make bigger
 			'#/wp-content/bs-booster-cache/#',
+
+			// Query Monitor
+			'#/plugins/query-monitor/assets/query-monitor.css#'
 
 			);
 
@@ -285,8 +304,8 @@ class MinifyCss
 
 		// Request Minify On The Fly
 		// It will preview the page with CSS minified
-		// Only if the admin is logged-in as it uses more resources (CPU / Memory)
-		if ( isset($_GET['wpacu_css_minify']) && Menu::userCanManageAssets() ) {
+		// Only if the admin is logged in as it uses more resources (CPU / Memory)
+		if ( isset($_GET['wpacu_css_minify']) && ( is_super_admin() || Menu::userCanManageAssets() ) ) {
 			self::isMinifyCssEnabledChecked('true');
 			return true;
 		}
@@ -299,9 +318,9 @@ class MinifyCss
 			return false;
 		}
 
-		$isSingularPage = defined('WPACU_CURRENT_PAGE_ID') && WPACU_CURRENT_PAGE_ID > 0 && is_singular();
+		$isSingularPage = (int)wpacuGetConstant('WPACU_CURRENT_PAGE_ID') > 0 && MainFront::isSingularPage();
 
-		if ($isSingularPage || Misc::isHomePage()) {
+		if ($isSingularPage || MainFront::isHomePage()) {
 			// If "Do not minify CSS on this page" is checked in "Asset CleanUp: Options" side meta box
 			if ($isSingularPage) {
 				$pageOptions = MetaBoxes::getPageOptions( WPACU_CURRENT_PAGE_ID ); // Singular page
@@ -329,10 +348,10 @@ class MinifyCss
 	 */
 	public static function isMinifyCssEnabledChecked($value)
 	{
-		if (! defined('WPACU_IS_MINIFY_CSS_ENABLED')) {
-			if ($value === 'true') {
+		if ( ! defined('WPACU_IS_MINIFY_CSS_ENABLED') ) {
+			if ( $value === 'true' ) {
 				define( 'WPACU_IS_MINIFY_CSS_ENABLED', true );
-			} elseif ($value === 'false') {
+			} elseif ( $value === 'false' ) {
 				define( 'WPACU_IS_MINIFY_CSS_ENABLED', false );
 			}
 		}

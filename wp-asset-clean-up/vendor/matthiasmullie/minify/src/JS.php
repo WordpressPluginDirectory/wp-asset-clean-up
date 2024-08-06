@@ -10,7 +10,7 @@
  * @license MIT License
  */
 
-namespace MatthiasMullie\Minify;
+namespace MatthiasMullieWpacu\Minify;
 
 /**
  * JavaScript Minifier Class.
@@ -122,12 +122,9 @@ class JS extends Minify
      */
     protected $operatorsAfter = array();
 
-    /**
-     * {@inheritdoc}
-     */
     public function __construct()
     {
-        call_user_func_array(array('\\MatthiasMullie\Minify\\Minify', '__construct'), func_get_args());
+        call_user_func_array(array('\\MatthiasMullieWpacu\Minify\\Minify', '__construct'), func_get_args());
 
         $dataDir = __DIR__ . '/../data/js/';
         $options = FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES;

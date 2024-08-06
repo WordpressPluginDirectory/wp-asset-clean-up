@@ -5,90 +5,95 @@ if (! isset($data)) {
 }
 ?>
 <script type="text/javascript" data-wpacu-own-inline-script="true">
-    var wpacuContentLinks = document.getElementsByClassName('wpacu-assets-collapsible'),
-        wpacuInlineCodeContentLinks = document.getElementsByClassName('wpacu-assets-inline-code-collapsible'),
-        wpacuPluginToggleWrapLinks = document.getElementsByClassName('wpacu-plugin-contracted-wrap-link'),
-        wpacuI, wpacuITwo, wpacuIThree;
+    function wpacuCollapsibleInit()
+    {
+        var wpacuContentLinks = document.getElementsByClassName('wpacu-assets-collapsible'),
+            wpacuInlineCodeContentLinks = document.getElementsByClassName('wpacu-assets-inline-code-collapsible'),
+            wpacuPluginToggleWrapLinks = document.getElementsByClassName('wpacu-plugin-contracted-wrap-link'),
+            wpacuI, wpacuITwo, wpacuIThree;
 
-    // "Styles" & "Scripts" main areas
-    for (wpacuI = 0; wpacuI < wpacuContentLinks.length; wpacuI++) {
-        wpacuContentLinks[wpacuI].addEventListener('click', function (e) {
-            e.preventDefault();
+        // "Styles" & "Scripts" main areas
+        for (wpacuI = 0; wpacuI < wpacuContentLinks.length; wpacuI++) {
+            wpacuContentLinks[wpacuI].addEventListener('click', function (e) {
+                e.preventDefault();
 
-            this.classList.toggle('wpacu-assets-collapsible-active');
+                this.classList.toggle('wpacu-assets-collapsible-active');
 
-            var assetsListContent = this.nextElementSibling;
+                var assetsListContent = this.nextElementSibling;
 
-            if (assetsListContent.style.maxHeight) {
-                assetsListContent.style.maxHeight = null;
-            } else {
-                //assetsListContent.style.maxHeight = assetsListContent.scrollHeight + "px";
-                assetsListContent.style.maxHeight = 'inherit';
-            }
-        });
-    }
+                if (assetsListContent.style.maxHeight) {
+                    assetsListContent.style.maxHeight = null;
+                } else {
+                    //assetsListContent.style.maxHeight = assetsListContent.scrollHeight + "px";
+                    assetsListContent.style.maxHeight = 'inherit';
+                }
+            });
+        }
 
-    // Inline code associated with the handle (expand)
-    for (wpacuITwo = 0; wpacuITwo < wpacuInlineCodeContentLinks.length; wpacuITwo++) {
-        wpacuInlineCodeContentLinks[wpacuITwo].addEventListener('click', function (e) {
-            e.preventDefault();
+        // Inline code associated with the handle (expand)
+        for (wpacuITwo = 0; wpacuITwo < wpacuInlineCodeContentLinks.length; wpacuITwo++) {
+            wpacuInlineCodeContentLinks[wpacuITwo].addEventListener('click', function (e) {
+                e.preventDefault();
 
-            this.classList.toggle('wpacu-assets-inline-code-collapsible-active');
+                this.classList.toggle('wpacu-assets-inline-code-collapsible-active');
 
-            var assetInlineCodeContent = this.nextElementSibling;
+                var assetInlineCodeContent = this.nextElementSibling;
                 assetInlineCodeContent = assetInlineCodeContent.nextElementSibling;
 
-            if (assetInlineCodeContent.style.maxHeight) {
-                assetInlineCodeContent.style.maxHeight = null;
-            } else {
-                assetInlineCodeContent.style.maxHeight = assetInlineCodeContent.scrollHeight + 'px';
-            }
-        });
+                if (assetInlineCodeContent.style.maxHeight) {
+                    assetInlineCodeContent.style.maxHeight = null;
+                } else {
+                    assetInlineCodeContent.style.maxHeight = assetInlineCodeContent.scrollHeight + 'px';
+                }
+            });
+        }
+
+        for (wpacuIThree = 0; wpacuIThree < wpacuPluginToggleWrapLinks.length; wpacuIThree++) {
+            wpacuPluginToggleWrapLinks[wpacuIThree].addEventListener('click', function (e) {
+                e.preventDefault();
+
+                var wpacuNext = this.nextElementSibling;
+
+                if (this.classList.contains('wpacu-link-closed')) {
+                    // Change Link Class
+                    this.classList.remove('wpacu-link-closed');
+                    this.classList.add('wpacu-link-open');
+
+                    // Change Target Content  Class
+                    wpacuNext.classList.remove('wpacu-area-closed');
+                    wpacuNext.classList.add('wpacu-area-open');
+                } else {
+                    // Change Link Class
+                    this.classList.remove('wpacu-link-open');
+                    this.classList.add('wpacu-link-closed');
+
+                    // Change Target Content Class
+                    wpacuNext.classList.remove('wpacu-area-open');
+                    wpacuNext.classList.add('wpacu-area-closed');
+                }
+            });
+        }
+
+        // Check if the contract / expand buttons exist (e.g. in view-default.php)
+        var $wpacuContractAllBtn = document.getElementById('wpacu-assets-contract-all'),
+            $wpacuExpandAllBtn = document.getElementById('wpacu-assets-expand-all');
+
+        if (typeof ($wpacuContractAllBtn) != 'undefined' && $wpacuContractAllBtn != null) {
+            $wpacuContractAllBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                wpacuContractAllMainAreas();
+            });
+        }
+
+        if (typeof ($wpacuExpandAllBtn) != 'undefined' && $wpacuExpandAllBtn != null) {
+            $wpacuExpandAllBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                wpacuExpandAllMainAreas();
+            });
+        }
     }
 
-    for (wpacuIThree = 0; wpacuIThree < wpacuPluginToggleWrapLinks.length; wpacuIThree++) {
-        wpacuPluginToggleWrapLinks[wpacuIThree].addEventListener('click', function (e) {
-            e.preventDefault();
-
-            var wpacuNext = this.nextElementSibling;
-
-            if (this.classList.contains('wpacu-link-closed')) {
-                // Change Link Class
-                this.classList.remove('wpacu-link-closed');
-                this.classList.add('wpacu-link-open');
-
-                // Change Target Content  Class
-                wpacuNext.classList.remove('wpacu-area-closed');
-                wpacuNext.classList.add('wpacu-area-open');
-            } else {
-                // Change Link Class
-                this.classList.remove('wpacu-link-open');
-                this.classList.add('wpacu-link-closed');
-
-                // Change Target Content Class
-                wpacuNext.classList.remove('wpacu-area-open');
-                wpacuNext.classList.add('wpacu-area-closed');
-            }
-        });
-    }
-
-    // Check if the contract / expand buttons exist (e.g. in view-default.php)
-    var $wpacuContractAllBtn = document.getElementById('wpacu-assets-contract-all'),
-        $wpacuExpandAllBtn = document.getElementById('wpacu-assets-expand-all');
-
-    if (typeof($wpacuContractAllBtn) != 'undefined' && $wpacuContractAllBtn != null) {
-        $wpacuContractAllBtn.addEventListener('click', function (e) {
-            e.preventDefault();
-            wpacuContractAllMainAreas();
-        });
-    }
-
-    if (typeof($wpacuExpandAllBtn) != 'undefined' && $wpacuExpandAllBtn != null) {
-        $wpacuExpandAllBtn.addEventListener('click', function (e) {
-            e.preventDefault();
-            wpacuExpandAllMainAreas();
-        });
-    }
+    setTimeout(wpacuCollapsibleInit, 1000);
 
     function wpacuExpandAllMainAreas() {
         var wpacuI, assetsListContent, wpacuContentLinks = document.getElementsByClassName('wpacu-assets-collapsible');
@@ -96,7 +101,6 @@ if (! isset($data)) {
         for (wpacuI = 0; wpacuI < wpacuContentLinks.length; wpacuI++) {
             wpacuContentLinks[wpacuI].classList.add('wpacu-assets-collapsible-active');
             assetsListContent = wpacuContentLinks[wpacuI].nextElementSibling;
-            //assetsListContent.style.maxHeight = assetsListContent.scrollHeight + 'px';
             assetsListContent.style.maxHeight = 'inherit';
             assetsListContent.classList.remove('wpacu-open');
         }

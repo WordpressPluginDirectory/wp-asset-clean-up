@@ -3,7 +3,10 @@
  * No direct access to this file
  * This content is placed inside #wpacu_meta_box_content meta box DIV element
  */
-use WpAssetCleanUp\Misc;
+
+use WpAssetCleanUp\AssetsManager;
+use WpAssetCleanUp\MainFront;
+use WpAssetCleanUp\Tips;
 
 if (! isset($data)) {
     exit;
@@ -13,13 +16,13 @@ global $wp_version;
 
 $data['wp_version'] = $wp_version; // in case there is no version of a CSS/JS WordPress appends its latest version to "ver"
 
-$metaBoxLoadedFine = (! (isset($data['is_dashboard_view'], $data['wp_remote_post']) && $data['is_dashboard_view'] && ! empty($data['wp_remote_post'])));
+$metaBoxLoadedFine = ( ! (isset($data['is_dashboard_view']) && $data['is_dashboard_view'] && ! empty($data['wp_remote_post'])) );
 
 if (! $metaBoxLoadedFine) {
-    // Errors for "WP Remote Post"? Print them out
+    // Errors for "WP Remote POST"? Print them out
     ?>
     <div class="ajax-wp-remote-post-call-error-area">
-        <p><span class="dashicons dashicons-warning"></span> <?php _e('It looks like "WP Remote Post" method for retrieving assets via the Dashboard is not working in this environment.', 'wp-asset-clean-up'); ?></p>
+        <p><span class="dashicons dashicons-warning"></span> <?php _e('It looks like "WP Remote POST" method for retrieving assets via the Dashboard is not working in this environment.', 'wp-asset-clean-up'); ?></p>
         <p><?php esc_html_e('Since the server (from its IP) is making the call, it will not "behave" in the same way as the "Direct" method, which could bypass for instance any authentication request (you might use a staging website that is protected by login credentials).', 'wp-asset-clean-up'); ?></p>
         <p><?php esc_html_e('Consider using "Direct" method. If that doesn\'t work either, use the "Manage in the Front-end" option (which should always work in any instance) and submit a ticket regarding the problem you\'re having. Here\'s the output received by the call:', 'wp-asset-clean-up'); ?></p>
         <table class="table-data">
@@ -41,7 +44,7 @@ if (! $metaBoxLoadedFine) {
     exit();
 }
 
-$tipsClass = new \WpAssetCleanUp\Tips();
+$tipsClass = new Tips();
 $data['tips'] = $tipsClass->list;
 
 if (is_admin()) {
@@ -59,11 +62,11 @@ if (is_admin()) {
     }
 } else {
     // Front-end view
-    if (Misc::isBlogPage()) {
+    if (MainFront::isBlogPage()) {
         ?>
         <p><span style="color: #0f6cab;" class="dashicons dashicons-admin-post"></span> <?php _e('You are currently viewing the page that shows your latest posts.', 'wp-asset-clean-up'); ?></p>
         <?php
-    } elseif (Misc::isHomePage()) {
+    } elseif (MainFront::isHomePage()) {
         ?>
         <p><span style="color: #0f6cab;" class="dashicons dashicons-admin-home"></span> <?php _e('You are currently viewing the home page.', 'wp-asset-clean-up'); ?></p>
         <?php
@@ -109,14 +112,15 @@ if ($data['bulk_unloaded_type'] === 'post_type') {
     <?php
 }
 
-if (! is_404()) {
-    if (isset($data['post_type']) && $data['post_type'] && ! (isset($data['is_for_singular']) && $data['is_for_singular'])) {
-	?>
-        <div class="wpacu_verified">
-            <strong>Page URL:</strong> <a target="_blank" href="<?php echo esc_url($data['fetch_url']); ?>"><span><?php echo esc_url($data['fetch_url']); ?></span></a>
-        </div>
-	<?php
-    }
+// Prevent double printing of the fetching URL
+$calledFromOwnPluginAssetsManagerPage = isset($_POST['called_from_plugin_own_asset_manager']) && $_POST['called_from_plugin_own_asset_manager'];
+
+if ( ! $calledFromOwnPluginAssetsManagerPage && isset($data['fetch_url']) && $data['fetch_url'] && ! is_404() ) {
+    ?>
+    <div class="wpacu_verified">
+        <strong>Page URL:</strong> <a target="_blank" href="<?php echo esc_url($data['fetch_url']); ?>"><span><?php echo esc_url($data['fetch_url']); ?></span></a>
+    </div>
+    <?php
 }
 
 if (isset($data['page_template'])) {
@@ -173,15 +177,16 @@ if ($data['plugin_settings']['assets_list_layout'] === 'by-rules') {
 	$viewAssetsMode = 'by-rules'; // Enqueued Files with at least one rule & Enqueued Files with no rules
 }
 
-$data['page_unload_text'] = __('Unload on this page', 'wp-asset-clean-up');
-
-if (is_singular()) {
+// Only specific for the front-end view
+if ( ! is_admin() && \WpAssetCleanUp\MainFront::isSingularPage() ) {
     global $post;
     ?>
-    <input type="hidden" name="wpacu_is_singular_page" value="<?php echo (int)$post->ID; ?>" />
+    <input type="hidden" name="wpacu_is_singular_page" value="<?php echo $post->ID; ?>" />
     <?php
 }
 
+// e.g. Unload on this page, Unload on this product page (depending on the page where the assets are managed)
+$data = AssetsManager::textRulesToShowInCssJsManager($data);
 ?>
 <div class="<?php if ($data['plugin_settings']['input_style'] !== 'standard') { ?>wpacu-switch-enhanced<?php } else { ?>wpacu-switch-standard<?php } ?>">
     <?php

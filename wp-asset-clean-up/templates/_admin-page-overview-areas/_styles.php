@@ -2,12 +2,14 @@
 /*
  * No direct access to this file
  */
+
+use WpAssetCleanUp\Overview;
+
 if (! isset($data)) {
 	exit;
 }
 ?>
 <hr style="margin: 15px 0;"/>
-
 <h3><span class="dashicons dashicons-admin-appearance"></span> <?php _e('Stylesheets (.css)', 'wp-asset-clean-up'); ?>
 	<?php
 	if (isset($data['handles']['styles']) && count($data['handles']['styles']) > 0) {
@@ -15,7 +17,7 @@ if (! isset($data)) {
 	}
 	?></h3>
 <?php
-if (isset($data['handles']['styles']) && ! empty($data['handles']['styles'])) {
+if ( ! empty($data['handles']['styles']) ) {
 	?>
 	<table class="wp-list-table wpacu-overview-list-table widefat fixed striped">
 		<thead>
@@ -32,23 +34,27 @@ if (isset($data['handles']['styles']) && ! empty($data['handles']['styles'])) {
 			$trStyle = $hasProTraces ? 'opacity: 0.5;' : '';
 			// [/wpacu_lite]
 			?>
-			<tr class="wpacu_global_rule_row wpacu_bulk_change_row" style="<?php echo esc_attr($trStyle); ?>">
-				<td>
-					<?php
-					\WpAssetCleanUp\Overview::renderHandleTd($handle, 'styles', $data);
+			<tr id="wpacu-overview-css-<?php echo esc_attr($handle); ?>" class="wpacu_global_rule_row wpacu_bulk_change_row" style="<?php echo esc_attr($trStyle); ?>">
+                <td>
+                    <?php
+                    Overview::renderHandleTd($handle, 'styles', $data);
+                    ?>
 
+                    <?php
+                    // [wpacu_lite]
 					if ($hasProTraces) {
 						echo ' &#10230; Inactive rule left from the PRO version';
 					}
+                    // [/wpacu_lite]
 					?>
 				</td>
 				<td>
 					<?php
-					$handleData['handle'] = $handle;
+					$handleData['handle']     = $handle;
 					$handleData['asset_type'] = 'styles';
-					$handleChangesOutput = \WpAssetCleanUp\Overview::renderHandleChangesOutput($handleData);
+					$handleChangesOutput      = Overview::renderHandleChangesOutput($handleData);
 
-					if (! empty($handleChangesOutput)) {
+					if ( ! empty($handleChangesOutput) ) {
 						echo '<ul style="margin: 0;">' . "\n";
 
 						foreach ( $handleChangesOutput as $handleChangesOutputPart ) {

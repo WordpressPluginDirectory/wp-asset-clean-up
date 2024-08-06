@@ -1,4 +1,7 @@
 <?php
+/** @noinspection ALL */
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 /**

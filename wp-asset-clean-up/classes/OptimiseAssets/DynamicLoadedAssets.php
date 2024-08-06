@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp\OptimiseAssets;
 
 /**
@@ -12,7 +14,8 @@ class DynamicLoadedAssets
 	 * @param $value
 	 *
 	 * @return bool|mixed|string
-	 */
+     * @noinspection NestedPositiveIfStatementsInspection
+     */
 	public static function getAssetContentFrom($from, $value)
 	{
 		$assetContent = '';

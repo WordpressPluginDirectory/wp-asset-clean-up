@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
@@ -10,51 +12,10 @@ use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
  */
 class Misc
 {
-	/**
-	 * @var array
-	 */
-	public static $potentialCachePlugins = array(
-		'breeze/breeze.php', // Breeze WordPress Cache Plugin
-		'cache-enabler/cache-enabler.php', // Cache Enabler
-		'cachify/cachify.php', // Cachify
-		'comet-cache/comet-cache.php', // Comet Cache
-		'hyper-cache/plugin.php', // Hyper Cache
-		'litespeed-cache/litespeed-cache.php', // LiteSpeed Cache
-		'simple-cache/simple-cache.php', // Simple Cache
-		'swift-performance-lite/performance.php', // Swift Performance Lite
-		'w3-total-cache/w3-total-cache.php', // W3 Total Cache
-		'wp-fastest-cache/wpFastestCache.php', // WP Fastest Cache
-		'wp-rocket/wp-rocket.php', // WP Rocket
-		'wp-super-cache/wp-cache.php' // WP Super Cache
-	);
-
-	/**
-	 * @var array
-	 */
-	public $activeCachePlugins = array();
-
     /**
      * @var
      */
     public static $showOnFront;
-
-	/**
-	 *
-	 */
-	public function getActiveCachePlugins()
-	{
-		if (empty($this->activeCachePlugins)) {
-			$activePlugins = self::getActivePlugins();
-
-			foreach ( self::$potentialCachePlugins as $cachePlugin ) {
-				if ( in_array( $cachePlugin, $activePlugins ) ) {
-					$this->activeCachePlugins[] = $cachePlugin;
-				}
-			}
-		}
-
-		return $this->activeCachePlugins;
-	}
 
     /**
      * @param $string
@@ -99,19 +60,9 @@ class Misc
 	}
 
 	/**
-	 * @param $content
-	 *
-	 * @return array|string|string[]|null
-	 */
-	public static function stripIrrelevantHtmlTags($content)
-	{
-		return preg_replace( '@<(script|style|iframe)[^>]*?>.*?</\\1>@si', '', $content );
-	}
-
-	/**
 	 * @return bool
 	 */
-	public static function isHttpsSecure()
+    public static function isHttpsSecure()
 	{
 		if ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ) {
 			return true;
@@ -127,50 +78,98 @@ class Misc
 	}
 
     /**
-     * @param $postId
-     * @return false|mixed|string
+     * @return bool
      */
-    public static function getPageUrl($postId)
+    public static function maybeIsSiteGround()
     {
-        // Was the home page detected?
-        if (self::isHomePage()) {
-            if (get_site_url() !== get_home_url()) {
-                $pageUrl = get_home_url();
+        // Bail if open_basedir restrictions are set, and we are not able to check certain directories.
+        if ( ! empty( ini_get( 'open_basedir' ) ) ) {
+            return false;
+        }
+
+        $fileExists = @file_exists( '/etc/yum.repos.d/baseos.repo' ) && @file_exists( '/Z' );
+
+        if ( ! $fileExists ) {
+            return false;
+        }
+
+        $possibleWpConfigFile = dirname(WP_CONTENT_DIR).'/wp-config.php';
+
+        $hasSiteGroundSignatureInWpConfigFile = false; // default
+
+        if ( $wpConfigContents = @file_get_contents($possibleWpConfigFile) ) {
+            $hasSiteGroundSignatureInWpConfigFile = strpos($wpConfigContents, '// By SiteGround Optimizer') !== false; // 'true' or 'false'
+        }
+
+        if ( ! $hasSiteGroundSignatureInWpConfigFile ) {
+            return false;
+        }
+
+        // All the conditions were passed
+        // Finally, return true
+        return true;
+    }
+
+	/**
+	 * @param $postId
+	 *
+	 * @return string
+	 */
+	public static function getPageUrl($postId)
+    {
+        if (is_404() || is_search()) {
+            return false;
+        }
+
+        // It's a singular page: post, page, custom post type (e.g. 'product' from WooCommerce)
+        // Works for both front-end and Dashboard view
+        if ($postId > 0) {
+            return self::_filterPageUrl(get_permalink($postId));
+        }
+
+
+        if (is_admin()) {
+            // If we're in the Dashboard area, and the page is not a taxonomy one
+            // Then, it's either a homepage or a post one (post, page, custom post type)
+            // If $postId equals 0, then it's a homepage
+            if ($postId === 0) {
+                if (get_site_url() !== get_home_url()) {
+                    $pageUrl = get_home_url();
+                } else {
+                    $pageUrl = get_site_url();
+                }
+
+                return self::_filterPageUrl($pageUrl);
+            }
+        }
+
+        // Front-end view
+	    // It could be: Archive page (e.g. author, category, tag, date, custom taxonomy), Search page, 404 page etc.
+        if ( ! is_admin() ) {
+            global $wp;
+
+            $permalinkStructure = get_option('permalink_structure');
+
+            if ($permalinkStructure) {
+                $pageUrl = home_url($wp->request);
             } else {
-                $pageUrl = get_site_url();
+                $pageUrl = home_url($_SERVER['REQUEST_URI']);
+            }
+
+            if (strpos($_SERVER['REQUEST_URI'], '?') !== false) {
+                list($cleanRequestUri) = explode('?', $_SERVER['REQUEST_URI']);
+            } else {
+                $cleanRequestUri = $_SERVER['REQUEST_URI'];
+            }
+
+            if (substr($cleanRequestUri, -1) === '/') {
+                $pageUrl .= '/';
             }
 
             return self::_filterPageUrl($pageUrl);
         }
 
-	    // It's singular page: post, page, custom post type (e.g. 'product' from WooCommerce)
-	    if ($postId > 0) {
-		    return self::_filterPageUrl(get_permalink($postId));
-	    }
-
-	    // If it's not a singular page, nor the home page, continue...
-	    // It could be: Archive page (e.g. author, category, tag, date, custom taxonomy), Search page, 404 page etc.
-	    global $wp;
-
-        $permalinkStructure = get_option('permalink_structure');
-
-        if ($permalinkStructure) {
-		    $pageUrl = home_url($wp->request);
-	    } else {
-		    $pageUrl = home_url($_SERVER['REQUEST_URI']);
-	    }
-
-        if (strpos($_SERVER['REQUEST_URI'], '?') !== false) {
-	        list( $cleanRequestUri ) = explode( '?', $_SERVER['REQUEST_URI'] );
-        } else {
-	        $cleanRequestUri = $_SERVER['REQUEST_URI'];
-        }
-
-        if (substr($cleanRequestUri, -1) === '/') {
-        	$pageUrl .= '/';
-        }
-
-        return self::_filterPageUrl($pageUrl);
+        return '';
     }
 
     /**
@@ -182,7 +181,7 @@ class Misc
         // If we are in the Dashboard on an HTTPS connection,
         // then we will make the AJAX call over HTTPS as well for the front-end
         // to avoid blocking
-        if (self::isHttpsSecure() && strpos($postUrl, 'http://') === 0) {
+        if (self::isHttpsSecure() && strncmp($postUrl, 'http://', 7) === 0) {
             $postUrl = str_ireplace('http://', 'https://', $postUrl);
         }
 
@@ -205,87 +204,15 @@ class Misc
     }
 
 	/**
-	 * @param $postTypes
-	 *
-	 * @return mixed
-	 */
-	public static function filterPostTypesList($postTypes)
-	{
-		foreach ($postTypes as $postTypeKey => $postTypeValue) {
-			// Exclude irrelevant custom post types
-			if (in_array($postTypeKey, MetaBoxes::$noMetaBoxesForPostTypes)) {
-				unset($postTypes[$postTypeKey]);
-			}
-
-			// Polish existing values
-			if ($postTypeKey === 'product' && self::isPluginActive('woocommerce/woocommerce.php')) {
-				$postTypes[$postTypeKey] = 'product &#10230; WooCommerce';
-			}
-
-			if ($postTypeKey === 'download' && self::isPluginActive('easy-digital-downloads/easy-digital-downloads.php')) {
-				$postTypes[$postTypeKey] = 'download &#10230; Easy Digital Downloads';
-			}
-		}
-
-		return $postTypes;
-	}
-
-	/**
-	 * Note: If plugins are disabled via "Plugins Manager" -> "IN THE DASHBOARD /wp-admin/"
-	 * where the target pages require this function, the list could be incomplete if those plugins registered custom post types
-	 *
-	 * @param $postTypes
-	 *
-	 * @return mixed
-	 */
-	public static function filterCustomPostTypesList($postTypes)
-	{
-		foreach (array_keys($postTypes) as $postTypeKey) {
-			if (in_array($postTypeKey, array('post', 'page', 'attachment'))) {
-				unset($postTypes[$postTypeKey]); // no default post types
-			}
-
-			// Polish existing values
-			if ($postTypeKey === 'product' && self::isPluginActive('woocommerce/woocommerce.php')) {
-				$postTypes[$postTypeKey] = 'product &#10230; WooCommerce';
-			}
-
-			if ($postTypeKey === 'download' && self::isPluginActive('easy-digital-downloads/easy-digital-downloads.php')) {
-				$postTypes[$postTypeKey] = 'download &#10230; Easy Digital Downloads';
-			}
-		}
-
-		return $postTypes;
-	}
-
-	/**
-	 * @param $postTypes
-	 *
-	 * @return mixed
-	 */
-	public static function filterCustomTaxonomyList($taxonomyList)
-	{
-		foreach (array_keys($taxonomyList) as $taxonomy) {
-			if (in_array($taxonomy, array('category', 'post_tag', 'post_format'))) {
-				unset($taxonomyList[$taxonomy]); // no default post types
-			}
-
-			// Polish existing values
-			if ($taxonomy === 'product_cat' && Misc::isPluginActive('woocommerce/woocommerce.php')) {
-				$taxonomyList[$taxonomy] = 'product_cat &#10230; Product\'s Category in WooCommerce';
-			}
-		}
-
-		return $taxonomyList;
-	}
-
-	/**
 	 * @return void
-	 */
+     *
+     * @noinspection PhpUndefinedFunctionInspection
+     * @noinspection BadExceptionsProcessingInspection
+     */
 	public static function w3TotalCacheFlushObjectCache()
 	{
 		// Flush "W3 Total Cache" before printing the list as sometimes the old list shows after the CSS/JS manager is reloaded
-		if (function_exists('w3tc_objectcache_flush') && Misc::isPluginActive('w3-total-cache/w3-total-cache.php')) {
+		if (function_exists('w3tc_objectcache_flush') && wpacuIsPluginActive('w3-total-cache/w3-total-cache.php')) {
 			try {
 				w3tc_objectcache_flush();
 			} catch(\Exception $e) {}
@@ -294,11 +221,13 @@ class Misc
 
 	/**
 	 * @return bool
-	 */
+     *
+     * @noinspection BadExceptionsProcessingInspection
+     */
 	public static function isElementorMaintenanceModeOn()
     {
 	    // Elementor's maintenance or coming soon mode
-	    if (class_exists('\Elementor\Maintenance_Mode') && Misc::isPluginActive('elementor/elementor.php')) {
+	    if (class_exists('\Elementor\Maintenance_Mode') && wpacuIsPluginActive('elementor/elementor.php')) {
 		    try {
 			    $elementorMaintenanceMode = \Elementor\Maintenance_Mode::get( 'mode' ); // if any
 			    if ( $elementorMaintenanceMode && in_array($elementorMaintenanceMode, array('maintenance', 'coming_soon')) ) {
@@ -312,14 +241,16 @@ class Misc
 
 	/**
 	 * @return bool
-	 */
+     *
+     * @noinspection BadExceptionsProcessingInspection
+     */
 	public static function isElementorMaintenanceModeOnForCurrentAdmin()
     {
     	if ( defined('WPACU_IS_ELEMENTOR_MAINTENANCE_MODE_TEMPLATE_ID') ) {
     		return true;
 	    }
 
-	    if (class_exists('\Elementor\Maintenance_Mode') && Misc::isPluginActive('elementor/elementor.php')) {
+	    if (class_exists('\Elementor\Maintenance_Mode') && wpacuIsPluginActive('elementor/elementor.php')) {
 		    try {
 			    // Elementor Template ID (Chosen for maintenance or coming soon mode)
 			    $elementorMaintenanceModeTemplateId = \Elementor\Maintenance_Mode::get( 'template_id' );
@@ -335,131 +266,14 @@ class Misc
     }
 
     /**
-     * @return bool
-     */
-    public static function isHomePage()
-    {
-	    // Docs: https://codex.wordpress.org/Conditional_Tags
-
-	    // Elementor's Maintenance Mode is ON
-	    if (defined('WPACU_IS_ELEMENTOR_MAINTENANCE_MODE_TEMPLATE_ID')) {
-		    return false;
-	    }
-
-	    // "Your latest posts" -> sometimes it works as is_front_page(), sometimes as is_home())
-	    // "A static page (select below)" -> In this case is_front_page() should work
-
-	    // Sometimes neither of these two options are selected
-	    // (it happens with some themes that have an incorporated page builder)
-	    // and is_home() tends to work fine
-
-	    // Both will be used to be sure the home page is detected
-
-	    // VARIOUS SCENARIOS for "Your homepage displays" option from Settings -> Reading
-
-	    // 1) "Your latest posts" is selected
-	    if (self::getShowOnFront() === 'posts' && is_front_page()) {
-	    	// Default homepage
-	    	return true;
-	    }
-
-	    // 2) "A static page (select below)" is selected
-
-	    // Note: Either "Homepage:" or "Posts page:" need to have a value set
-	    // Otherwise, it will default to "Your latest posts", the other choice from "Your homepage displays"
-
-	    if (self::getShowOnFront() === 'page') {
-			$pageOnFront  = get_option('page_on_front');
-			$pageForPosts = get_option('page_for_posts');
-
-		    // "Homepage:" has a value
-			if ($pageOnFront > 0 && is_front_page()) {
-				// Static Homepage
-				return true;
-			}
-
-		    // "Homepage:" has no value
-			if (! $pageOnFront && self::isBlogPage()) {
-				// Blog page
-				return true;
-			}
-
-			// Both have values
-		    if ($pageOnFront && $pageForPosts && ($pageOnFront !== $pageForPosts) && self::isBlogPage()) {
-		    	return false; // Blog posts page (but not home page)
-		    }
-
-		    // Another scenario is when both 'Homepage:' and 'Posts page:' have values
-		    // If we are on the blog page (which is "Posts page:" value), then it will return false
-		    // As it's not the main page of the website
-		    // e.g. Main page: www.yoursite.com - Blog page: www.yoursite.com/blog/
-	    }
-
-	    // Some WordPress themes such as "Extra" have their own custom value
-	    return ( ( ( self::getShowOnFront() !== '') || ( self::getShowOnFront() === 'layout') )
-	             &&
-	             ((is_home() || self::isBlogPage()) || self::isRootUrl())
-	    );
-    }
-
-	/**
-	 * @return bool
-	 */
-	public static function isRootUrl()
-	{
-		$siteUrl = get_bloginfo('url');
-
-		$urlPath = (string)parse_url($siteUrl, PHP_URL_PATH);
-
-		$requestURI = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
-
-		$urlPathNoForwardSlash = $urlPath;
-		$requestURINoForwardSlash = $requestURI;
-
-		if ($urlPath && substr($urlPath, -1) === '/') {
-			$urlPathNoForwardSlash = substr($urlPath, 0, -1);
-		}
-
-		if ($requestURI && substr($requestURI, -1) === '/') {
-			$requestURINoForwardSlash = substr($requestURI, 0, -1);
-		}
-
-		return ($urlPathNoForwardSlash === $requestURINoForwardSlash);
-	}
-
-	/**
-	 * @param $handleData
-	 *
-	 * @return bool
-	 */
-	public static function isCoreFile($handleData)
-    {
-	    $handleData = (object)$handleData;
-
-	    $part = str_replace(
-		    array(
-			    'http://',
-			    'https://',
-			    '//'
-		    ),
-		    '',
-		    $handleData->src
-	    );
-
-	    $parts     = explode('/', $part);
-	    $parentDir = isset($parts[1]) ? $parts[1] : '';
-
-	    // Loaded from WordPress directories (Core)
-	    return in_array( $parentDir, array( 'wp-includes', 'wp-admin' ) ) || strpos( $handleData->src,
-			    '/'.self::getPluginsDir('dir_name').'/jquery-updater/js/jquery-' ) !== false;
-    }
-
-	/**
+     * This function does not just detect the fact that the call is a local one,
+     * But it will return true ONLY if the actual asset file (CSS/JS) actually exists
+     *
 	 * @param $src
 	 *
 	 * @return array
 	 */
-	public static function getLocalSrc($src)
+	public static function getLocalSrcIfExist($src)
     {
     	if (! $src) {
     	    return array();
@@ -482,15 +296,48 @@ class Misc
 	    	if (strpos($src, $path) !== false) {
 	    		list ($baseUrl, $relSrc) = explode($path, $src);
 
-	    		$localPathToFile = self::getWpRootDirPath() . $path . $relSrc;
+                $fileFullRelPath = $path . $relSrc;
+
+	    		$localPathToFile = self::getWpRootDirPathBasedOnPath($fileFullRelPath) . $fileFullRelPath;
 
 	    		if (is_file($localPathToFile)) {
-	    			return array('base_url' => $baseUrl, 'rel_src' => $path . $relSrc, 'file_exists' => 1);
+	    			return array('base_url' => $baseUrl, 'rel_src' => $fileFullRelPath, 'file_exists' => 1);
 			    }
 		    }
 	    }
 
 	    return array();
+    }
+
+    /**
+     * This one checks if the "src" is local
+     * Without the need for the CSS/JS file to exist
+     * e.g. /index.php?value will return true if it's within the same domain
+     * e.g. www.cdn-domain.com/wp-content/custom-file-name.css will return true
+     * if the local file /wp-content/custom-file-name.css exists as some people use CDN
+     *
+     *
+     * @param $src
+     *
+     * @return bool
+     */
+    public static function isLocalSrc($src)
+    {
+        if (self::getLocalSrcIfExist($src)) {
+            return true;
+        }
+
+        if (strncmp(str_replace(site_url(), '', $src), '?', 1) === 0) {
+            // Starts with ? right after the site url (it's a local URL)
+            return true;
+        }
+
+        if (strpos($src, '?') !== false && strpos($src, site_url()) !== false) {
+            // Dynamic Local URL (e.g. it could be something like /index.php?load_css=value
+            return true;
+        }
+
+        return false;
     }
 
 	/**
@@ -523,18 +370,49 @@ class Misc
 	    $relSrc = $src;
 
 	    if ($localAssetPath) {
-		    $relSrc = str_replace(self::getWpRootDirPath(), '', $relSrc);
+		    $relSrc = str_replace(self::getWpRootDirPathBasedOnPath($relSrc), '', $relSrc);
 	    }
 
 	    $relSrc = str_replace(site_url(), '', $relSrc);
 
 	    // Does it start with '//'? (protocol is missing) - the replacement above wasn't made
-	    if (strpos($relSrc, '//') === 0) {
+	    if (strncmp($relSrc, '//', 2) === 0) {
 		    $siteUrlNoProtocol = str_replace(array('http:', 'https:'), '', site_url());
 		    $relSrc = str_replace($siteUrlNoProtocol, '', $relSrc);
 	    }
 
 	    return $relSrc;
+    }
+
+    /**
+     * This is a basic RegEx check that is used in case there's a match
+     * This is to avoid further resources to detect the 'src' (e.g. via DOMDocument)
+     *
+     * @param $tagOutput
+     *
+     * @return bool
+     */
+    public static function isScriptTagWithSrcRegExCheck($tagOutput)
+    {
+        // This is good for tags such as <script > alert('<script src="">');</script>
+        if (preg_match_all('#<script(\s+|)>#Umi', $tagOutput, $matches) && isset($matches[0][0]) && strpos($tagOutput, $matches[0][0]) === 0) {
+            return false; // no "src"
+        }
+
+        if ( preg_match(
+            '#<script(\s+)type=(\'|"|)text/javascript(\'|"|)(\s+|)>'.'|'.
+            '<script(\s+)id=(\'|"|)(.*?)(\s+)type=(\'|"|)text/javascript(\'|"|)(\s+|)>'.'|'.
+            '<script(\s+)type=(\'|"|)text/javascript(\'|"|)(\s+)id=(\'|"|)(.*?)(\'|"|)(\s+|)>#Usmi',
+            $tagOutput
+        ) ) {
+            return false; // no "src"
+        }
+
+        if (preg_match('#src(\s+|)=(\s+|)("|\'|)(.*)("|\'|)|src(\s+|)=(\s+|)(.*)(\s+)#Usmi', $tagOutput)) {
+            return true;
+        }
+
+        return false;
     }
 
 	/**
@@ -547,19 +425,24 @@ class Misc
 	{
 		$tagOutput = trim($tagOutput);
 
-		if ( strpos( $tagOutput, '<script' ) === 0 ) {
+		if (strncmp($tagOutput, '<script', 7) === 0 ) {
 			$tagNameToCheck = 'script';
 
 			if ($attribute === '') {
 				$attribute = 'src';
 			}
-		} elseif ( strpos( $tagOutput, '<link' ) === 0 ) {
+
+            // First, do some basic check (maybe there's no attribute there, and there's no need to continue)
+            if ($attribute === 'src' && ! self::isScriptTagWithSrcRegExCheck($tagOutput)) {
+                return false;
+            }
+		} elseif (strncmp($tagOutput, '<link', 5) === 0 ) {
 			$tagNameToCheck = 'link';
 
 			if ($attribute === '') {
 				$attribute = 'href';
 			}
-		} elseif ( strpos( $tagOutput, '<style' ) === 0 ) {
+		} elseif (strncmp($tagOutput, '<style', 6) === 0 ) {
 			$tagNameToCheck = 'style';
 
 			if ($attribute === '') {
@@ -583,10 +466,12 @@ class Misc
 
 				if ( $scriptTagObj->hasAttributes() ) {
 					foreach ( $scriptTagObj->attributes as $attrObj ) {
-						if ( $attrObj->nodeName === $attribute ) {
+                        if ( $attrObj->nodeName === $attribute ) {
 							return trim( $attrObj->nodeValue );
 						}
 					}
+
+                    return ''; // There's no $attribute
 				}
 			}
 
@@ -610,7 +495,7 @@ class Misc
 	{
 		$tagOutput = trim( $tagOutput );
 
-		if ( strpos($tagOutput, '<script') === 0 ) {
+		if (strncmp($tagOutput, '<script', 7) === 0 ) {
 			if ( $attribute === '' ) {
 				$attribute = 'src';
 			}
@@ -628,7 +513,7 @@ class Misc
 			preg_match_all( '#<script.*?'.$attribute.'\s*=\s*(.*?)#Usmi', $tagOutput, $outputMatches );
 		}
 
-		if ( strpos($tagOutput, '<link') === 0 ) {
+		if (strncmp($tagOutput, '<link', 5) === 0 ) {
 			if ( $attribute === '' ) {
 				$attribute = 'href';
 			}
@@ -636,7 +521,7 @@ class Misc
 			preg_match_all( '#<link.*?'.$attribute.'\s*=\s*(.*?)#Usmi', $tagOutput, $outputMatches );
 		}
 
-		if ( strpos($tagOutput, '<style') === 0 ) {
+		if (strncmp($tagOutput, '<style', 6) === 0 ) {
 			if ( $attribute === '' ) {
 				$attribute = 'type';
 			}
@@ -657,7 +542,7 @@ class Misc
 						return false;
 					}
 
-					return substr( $scriptPartTwo, 0, $posEndingQuote );
+					return trim ( substr( $scriptPartTwo, 0, $posEndingQuote ) );
 				}
 			}
 
@@ -670,7 +555,7 @@ class Misc
 					return false;
 				}
 
-				return substr( $scriptPartTwo, 0, $posFirstSpace );
+				return trim( substr( $scriptPartTwo, 0, $posFirstSpace ) );
 			}
 		}
 
@@ -697,14 +582,6 @@ class Misc
 		return $status;
 	}
 
-	/**
-	 * @return bool
-	 */
-	public static function isBlogPage()
-    {
-    	return (is_home() && !is_front_page());
-    }
-
     /**
      * @return mixed
      */
@@ -718,32 +595,6 @@ class Misc
     }
 
 	/**
-	 * @param $plugin
-	 *
-	 * @return bool
-	 */
-	public static function isPluginActive($plugin)
-	{
-		// Site level check
-		if (in_array( $plugin, (array) get_option( 'active_plugins', array() ), true )) {
-			return true;
-		}
-
-		// Multisite check
-		if ( ! is_multisite() ) {
-			return false;
-		}
-
-		$plugins = get_site_option( 'active_sitewide_plugins' );
-
-		if ( isset( $plugins[ $plugin ] ) ) {
-			return true;
-		}
-
-		return false;
-    }
-
-	/**
 	 * @return bool
 	 */
 	public static function isWpRocketMinifyHtmlEnabled()
@@ -753,7 +604,7 @@ class Misc
 	    	return false;
 	    }
 
-		if (self::isPluginActive('wp-rocket/wp-rocket.php')) {
+		if (wpacuIsPluginActive('wp-rocket/wp-rocket.php')) {
 			if (function_exists('get_rocket_option')) {
 				$wpRocketMinifyHtml = trim(get_rocket_option('minify_html')) ?: false;
 			} else {
@@ -775,7 +626,7 @@ class Misc
 	 */
 	public static function isClassicEditorUsed()
     {
-    	if (self::isPluginActive('classic-editor/classic-editor.php')) {
+    	if (wpacuIsPluginActive('classic-editor/classic-editor.php')) {
     		$ceReplaceOption = get_option('classic-editor-replace');
 			$ceAllowUsersOption = get_option('classic-editor-allow-users');
 
@@ -870,7 +721,7 @@ class Misc
 	{
 		$filename = wp_normalize_path( realpath( $filename ) );
 
-		if ( ! file_exists( $filename ) ) {
+		if ( ! is_file( $filename ) ) {
 			trigger_error(
 				sprintf(
 					/* translators: %s: Path to the JSON file. */
@@ -884,7 +735,7 @@ class Misc
 		$options      = wp_parse_args( $options, array( 'associative' => false ) );
 		$decoded_file = json_decode( file_get_contents( $filename ), $options['associative'] );
 
-		if ( JSON_ERROR_NONE !== json_last_error() ) {
+		if ( JSON_ERROR_NONE !== wpacuJsonLastError() ) {
 			trigger_error(
 				sprintf(
 				/* translators: 1: Path to the JSON file, 2: Error message. */
@@ -927,7 +778,7 @@ class Misc
 	 */
 	public static function getOuterHTML( $e )
 	{
-		$doc = Misc::initDOMDocument();
+		$doc = self::initDOMDocument();
 
 		$doc->appendChild( $doc->importNode( $e, true ) );
 
@@ -960,11 +811,11 @@ class Misc
 		// Unless it has to be returned (e.g. for debugging purposes), check it if it was returned before
 		// To avoid duplicated HTML code
 		if (! $forceReturn) {
-			if ( defined( 'WPACU_PRELOAD_ASYNC_SCRIPT_SHOWN' ) ) {
+			if ( wpacuIsDefinedConstant( 'WPACU_PRELOAD_ASYNC_SCRIPT_SHOWN' ) ) {
 				return '';
 			}
 
-			define( 'WPACU_PRELOAD_ASYNC_SCRIPT_SHOWN', 1 ); // mark it as already printed
+			wpacuDefineConstant( 'WPACU_PRELOAD_ASYNC_SCRIPT_SHOWN', 1 ); // mark it as already printed
 		}
 
 		return <<<HTML
@@ -1005,19 +856,6 @@ HTML;
 	}
 
 	/**
-	 * @return int
-	 */
-	public static function jsonLastError()
-	{
-		if (function_exists('json_last_error')) {
-			return json_last_error();
-		}
-
-		// Fallback (notify the user through a warning)
-		return 0;
-	}
-
-	/**
 	 * @param $requestMethod
 	 * @param $key
 	 * @param mixed $defaultValue
@@ -1049,11 +887,11 @@ HTML;
 	 */
 	public static function isValidRequest($requestMethod, $key)
     {
-	    if ($requestMethod === 'post' && $key && isset($_POST[$key]) && ! empty($_POST[$key])) {
+	    if ($requestMethod === 'post' && $key && ! empty($_POST[$key])) {
 		    return true;
 	    }
 
-	    if ($requestMethod === 'get' && $key && isset($_GET[$key]) && ! empty($_GET[$key])) {
+	    if ($requestMethod === 'get' && $key && ! empty($_GET[$key])) {
 		    return true;
 	    }
 
@@ -1086,6 +924,8 @@ HTML;
 	 * @param $optionName
 	 * @param $optionValue
 	 * @param string $autoload
+     *
+     * @return bool|void
 	 */
 	public static function addUpdateOption($optionName, $optionValue, $autoload = 'no')
     {
@@ -1104,182 +944,11 @@ HTML;
 	    }
 
 		// get_option($optionName) didn't return false, thus the option is either an empty string or it has a value
-	    // either way, it exists in the database and the update will be triggered
+	    // either way, it exists in the database, and the update will be triggered
 
     	// Value is in the database already | Update it
-    	update_option($optionName, $optionValue, $autoload);
+    	return update_option($optionName, $optionValue, $autoload);
     }
-
-	/**
-	 * @param $type
-	 * e.g. 'per_page' will fetch only per page rules, excluding the bulk ones
-	 * such as unload everywhere, on this post type etc.
-	 *
-	 * @return int
-	 */
-	public static function getTotalUnloadedAssets($type = 'all')
-	{
-		if ($unloadedTotalAssets = get_transient(WPACU_PLUGIN_ID. '_total_unloaded_assets_'.$type)) {
-			return $unloadedTotalAssets;
-		}
-
-		global $wpdb;
-
-		$frontPageNoLoad      = get_option(WPACU_PLUGIN_ID . '_front_page_no_load');
-		$frontPageNoLoadArray = json_decode($frontPageNoLoad, ARRAY_A);
-
-		$unloadedTotalAssets = 0;
-
-		// Home Page: Unloads
-		if (isset($frontPageNoLoadArray['styles'])) {
-			$unloadedTotalAssets += count($frontPageNoLoadArray['styles']);
-		}
-
-		if (isset($frontPageNoLoadArray['scripts'])) {
-			$unloadedTotalAssets += count($frontPageNoLoadArray['scripts']);
-		}
-
-		// Posts, Pages, Custom Post Types: Individual Page Unloads
-		$sqlPart = '_' . WPACU_PLUGIN_ID . '_no_load';
-		$sqlQuery = <<<SQL
-SELECT pm.meta_value FROM `{$wpdb->prefix}postmeta` pm
-LEFT JOIN `{$wpdb->prefix}posts` p ON (p.ID = pm.post_id)
-WHERE (p.post_status='publish' OR p.post_status='private') AND pm.meta_key='{$sqlPart}'
-SQL;
-
-		$sqlResults = $wpdb->get_results($sqlQuery, ARRAY_A);
-
-		if (! empty($sqlResults)) {
-			foreach ($sqlResults as $row) {
-				$metaValue    = $row['meta_value'];
-				$unloadedList = @json_decode($metaValue, ARRAY_A);
-
-				if (empty($unloadedList)) {
-					continue;
-				}
-
-				foreach ($unloadedList as $assets) {
-					if (! empty($assets)) {
-						$unloadedTotalAssets += count($assets);
-					}
-				}
-			}
-		}
-
-		if ($type === 'all') {
-			$unloadedTotalAssets += self::getTotalBulkUnloadsFor( 'all' );
-		}
-
-		// To avoid the complex SQL query next time
-		set_transient(WPACU_PLUGIN_ID. '_total_unloaded_assets_'.$type, $unloadedTotalAssets, 28800);
-
-		return $unloadedTotalAssets;
-	}
-
-	/**
-	 * @param string $for
-	 *
-	 * @return int
-	 */
-	public static function getTotalBulkUnloadsFor($for)
-	{
-		$unloadedTotalAssets = 0;
-
-		if (in_array($for, array('everywhere', 'all'))) {
-			// Everywhere (Site-wide) unloads
-			$globalUnloadListJson = get_option(WPACU_PLUGIN_ID . '_global_unload');
-			$globalUnloadArray    = @json_decode($globalUnloadListJson, ARRAY_A);
-
-			foreach (array('styles', 'scripts') as $assetType) {
-				if ( isset( $globalUnloadArray[$assetType] ) && ! empty( $globalUnloadArray[$assetType] ) ) {
-					$unloadedTotalAssets += count( $globalUnloadArray[$assetType] );
-				}
-			}
-		}
-
-		if (in_array($for, array('bulk', 'all'))) {
-			// Any bulk unloads? e.g. unload specific CSS/JS on all pages of a specific post type
-			$bulkUnloadListJson = get_option(WPACU_PLUGIN_ID . '_bulk_unload');
-			$bulkUnloadArray  = @json_decode($bulkUnloadListJson, ARRAY_A);
-
-			$bulkUnloadedAllTypes = array('search', 'date', '404', 'taxonomy', 'post_type', 'author');
-			foreach (array('styles', 'scripts') as $assetType) {
-				if ( isset( $bulkUnloadArray[ $assetType ] ) ) {
-					foreach ( array_keys( $bulkUnloadArray[ $assetType ] ) as $dataType ) {
-						if ( strpos( $dataType, 'custom_post_type_archive_' ) !== false ) {
-							$bulkUnloadedAllTypes[] = $dataType;
-						}
-					}
-				}
-			}
-
-			foreach ( $bulkUnloadedAllTypes as $bulkUnloadedType ) {
-				if (in_array($bulkUnloadedType, array('search', 'date', '404')) || (strpos($bulkUnloadedType, 'custom_post_type_archive_') !== false)) {
-					foreach (array('styles', 'scripts') as $assetType) {
-						if ( isset( $bulkUnloadArray[$assetType][ $bulkUnloadedType ] ) && ! empty( $bulkUnloadArray[$assetType][ $bulkUnloadedType ] ) ) {
-							$unloadedTotalAssets += count( $bulkUnloadArray[$assetType][ $bulkUnloadedType ] );
-						}
-					}
-				} elseif ($bulkUnloadedType === 'author') {
-					foreach (array('styles', 'scripts') as $assetType) {
-						if ( isset( $bulkUnloadArray[$assetType][ $bulkUnloadedType ]['all'] ) && ! empty( $bulkUnloadArray[$assetType][ $bulkUnloadedType ]['all'] ) ) {
-							$unloadedTotalAssets += count( $bulkUnloadArray[$assetType][ $bulkUnloadedType ]['all'] );
-						}
-					}
-				} elseif (in_array($bulkUnloadedType, array('post_type', 'taxonomy'))) {
-					foreach (array('styles', 'scripts') as $assetType) {
-						if ( isset( $bulkUnloadArray[$assetType][ $bulkUnloadedType ] ) && ! empty( $bulkUnloadArray[$assetType][ $bulkUnloadedType ] ) ) {
-							foreach ( $bulkUnloadArray[$assetType][ $bulkUnloadedType ] as $objectValues ) {
-								$unloadedTotalAssets += count( $objectValues );
-							}
-						}
-					}
-				}
-			}
-		}
-
-		return $unloadedTotalAssets;
-	}
-
-	/**
-	 * @param $data
-	 * @param $assetTypeKey
-	 *
-	 * @return bool
-	 */
-	public static function handleHasAtLeastOneRule($data, $assetTypeKey)
-	{
-		// Is it unloaded?
-		if (strpos($data['row']['class'], 'wpacu_not_load') !== false) {
-			return true;
-		}
-
-		$isAssetPreloaded = (isset($data['preloads'][$assetTypeKey][$data['row']['obj']->handle]) && $data['preloads'][$assetTypeKey][$data['row']['obj']->handle])
-			? $data['preloads'][$assetTypeKey][$data['row']['obj']->handle]
-			: false;
-
-		// Preloaded? (either 'basic' for any CSS/JS or 'async' for CSS files)
-		if ($isAssetPreloaded) {
-			return true;
-		}
-
-		// Is it a Google Font request that was stripped site-wide?
-		if ($assetTypeKey === 'styles') {
-			$isGoogleFontLink = isset($data['row']['obj']->srcHref) && stripos($data['row']['obj']->srcHref, '//fonts.googleapis.com/') !== false;
-
-			if ($isGoogleFontLink && $data['plugin_settings']['google_fonts_remove']) {
-				return true;
-			}
-		}
-
-		// Was a filer hook used to load an alternative version of the handle?
-		if (isset($data['row']['obj']->src_origin, $data['row']['obj']->ver_origin)) {
-			return true;
-		}
-
-		// Finally, return false as the asset has no rules set
-		return false;
-	}
 
 	/**
 	 * @param string $get
@@ -1312,8 +981,28 @@ SQL;
 		return substr($relPathCurrentTheme, 0, $posLastForwardSlash) . '/';
 	}
 
+    /**
+     * @return array
+     */
+    public static function getUrlsToThemeDirs()
+    {
+        $urlsToThemeDirs = array();
+
+        foreach (search_theme_directories() as $themeDir => $themeDirArray) {
+            $themeUrl = '/'. str_replace(
+                '//',
+                '/',
+                str_replace(self::getWpRootDirPath(), '', $themeDirArray['theme_root']) . '/'. $themeDir . '/'
+            );
+
+            $urlsToThemeDirs[] = $themeUrl;
+        }
+
+        return array_unique($urlsToThemeDirs);
+    }
+
 	/**
-	 * Needed when the plugins' directory is different than the default one: /wp-content/plugins/
+	 * Needed when the plugins' directory is different from the default one: /wp-content/plugins/
 	 *
 	 * @param $values
 	 *
@@ -1332,104 +1021,28 @@ SQL;
 		return $values;
 	}
 
-	/**
-	 * @param $src
-	 *
-	 * @return bool|array
-	 */
-	public static function maybeIsInactiveAsset($src)
-	{
-		$pluginsDirRel = self::getPluginsDir();
+    /**
+     * @param $source
+     *
+     * @return mixed|string
+     */
+    public static function getHrefFromSource($source)
+    {
+        $siteUrl = get_site_url();
 
-		$srcAlt = $src;
+        // Determine source href, starting with '/' but not starting with '//'
+        if (strncmp($source, '/', 1) === 0 && strncmp($source, '//', 2) !== 0) {
+            $sourceHref = $siteUrl . $source;
+        } else {
+            $sourceHref = $source;
+        }
 
-		if ( strpos( $srcAlt, '//' ) === 0 ) {
-			$srcAlt = str_replace( str_replace( array( 'http://', 'https://' ), '//', site_url() ), '', $srcAlt );
-		}
+        if (strpos($sourceHref, '/wp-content/plugins/') !== false && self::isLocalSrc($sourceHref)) {
+            $sourceHref = str_replace('/wp-content/plugins/', '/' . self::getPluginsDir() . '/', $sourceHref);
+        }
 
-		$relSrc = str_replace( site_url(), '', $srcAlt );
-
-		/*
-		 * [START] plugin path
-		 */
-		if (strpos($src, $pluginsDirRel) !== false) {
-			// Quickest way
-			preg_match_all( '#/' . $pluginsDirRel . '/(.*?)/#', $src, $matches, PREG_PATTERN_ORDER );
-
-			if ( isset( $matches[1][0] ) && $matches[1][0] ) {
-				$pluginDirName = $matches[1][0];
-
-				$activePlugins    = self::getActivePlugins();
-				$activePluginsStr = implode( ',', $activePlugins );
-
-				if ( strpos( $activePluginsStr, $pluginDirName . '/' ) === false ) {
-					return array(
-						'from' => 'plugin',
-						'name' => $pluginDirName
-					); // it belongs to an inactive plugin
-				}
-			}
-
-			$relPluginsUrl = str_replace( site_url(), '', plugins_url() );
-
-			if ( strpos( $relSrc, '/' . $pluginsDirRel ) !== false ) {
-				list ( , $relSrc ) = explode( '/' . $pluginsDirRel, $relSrc );
-			}
-
-			if ( strpos( $relSrc, $relPluginsUrl ) !== false ) {
-				// Determine the plugin behind the $src
-				$relSrc = trim( str_replace( $relPluginsUrl, '', $relSrc ), '/' );
-
-				if ( strpos( $relSrc, '/' ) !== false ) {
-					list ( $pluginDirName, ) = explode( '/', $relSrc );
-
-					$activePlugins    = self::getActivePlugins();
-					$activePluginsStr = implode( ',', $activePlugins );
-
-					if ( strpos( $activePluginsStr, $pluginDirName . '/' ) === false ) {
-						return array(
-							'from' => 'plugin',
-							'name' => $pluginDirName
-						); // it belongs to an inactive plugin
-					}
-				}
-			}
-		}
-		/*
-		 * [END] plugin path
-		 */
-
-		/*
-		 * [START] theme path
-		 */
-		$themesDirRel = self::getThemesDirRel();
-
-		if (strpos($relSrc, $themesDirRel) !== false) {
-			if ( strpos( $relSrc, $themesDirRel ) !== false ) {
-				list ( , $relSrc ) = explode( $themesDirRel, $relSrc );
-			}
-
-			if ( strpos( $relSrc, '/' ) !== false ) {
-				list ( $themeDirName, ) = explode( '/', $relSrc );
-			}
-
-			if (isset($themeDirName)) {
-				$activeThemes = self::getActiveThemes();
-
-				if ( ! empty( $activeThemes ) && ! in_array($themeDirName, $activeThemes) ) {
-					return array(
-						'from' => 'theme',
-						'name' => $themeDirName
-					);
-				}
-			}
-		}
-		/*
-		 * [END] theme path
-		 */
-
-		return false;
-	}
+        return $sourceHref;
+    }
 
 	/**
 	 * @return array
@@ -1457,227 +1070,16 @@ SQL;
 	}
 
 	/**
-	 * @return array
-	 */
-	public static function getActiveThemes()
-	{
-		$activeThemes     = array();
-		$currentThemeSlug = get_stylesheet();
-
-		if ( current_user_can( 'switch_themes' ) ) {
-			$themes = wp_get_themes( array( 'allowed' => true ) );
-		} else {
-			$themes = array( wp_get_theme() );
-		}
-
-		foreach ( $themes as $theme ) {
-			$themeSlug = $theme->get_stylesheet();
-
-			if ( $themeSlug === $currentThemeSlug ) {
-				// Make sure both the parent and the child theme are in the list of active themes
-				// in case there are references from
-				$activeThemes[] = $currentThemeSlug;
-
-				$childEndsWith = '-child';
-				if ( self::endsWith( $currentThemeSlug, $childEndsWith ) ) {
-					$activeThemes[] = substr( $currentThemeSlug, 0, - strlen( $childEndsWith ) );
-				} else {
-					$activeThemes[] = $currentThemeSlug . $childEndsWith;
-				}
-			}
-		}
-
-		return $activeThemes;
-	}
-
-	/**
-	 * @return array
-	 */
-	public static function getCachedActiveFreePluginsIcons()
-	{
-		$activePluginsIconsJson = get_transient( 'wpacu_active_plugins_icons' );
-
-		if ( $activePluginsIconsJson ) {
-			$activePluginsIcons = @json_decode( $activePluginsIconsJson, ARRAY_A );
-
-			if ( ! empty( $activePluginsIcons ) && is_array( $activePluginsIcons ) ) {
-				return $activePluginsIcons;
-			}
-		}
-
-		return array(); // default
-	}
-
-	/**
-	 * @param bool $onlyTransient
-	 * @param bool $forceDownload
-	 *
-	 * @return array|bool|mixed|object
-	 */
-	public static function fetchActiveFreePluginsIconsFromWordPressOrg()
-    {
-	    $allActivePlugins = self::getActivePlugins();
-
-	    if (empty($allActivePlugins)) {
-	    	return array();
-	    }
-
-	    foreach ($allActivePlugins as $activePlugin) {
-		    if (! is_string($activePlugin) || strpos($activePlugin, '/') === false) {
-	    		continue;
-		    }
-
-	    	list($pluginSlug) = explode('/', $activePlugin);
-		    $pluginSlug = trim($pluginSlug);
-
-	    	if (! $pluginSlug) {
-	    		continue;
-		    }
-
-	    	// Avoid the calls to WordPress.org as much as possible
-		    // as it would decrease the resources and timing to fetch the data we need
-
-	    	// not relevant to check Asset CleanUp's plugin info in this case
-	    	if (in_array($pluginSlug, array('wp-asset-clean-up', 'wp-asset-clean-up-pro'))) {
-	    		continue;
-		    }
-
-	    	// no readme.txt file in the plugin's root folder? skip it
-			if (! is_file(WP_PLUGIN_DIR.'/'.$pluginSlug.'/readme.txt')) {
-				continue;
-			}
-
-		    $payload = array(
-			    'action'  => 'plugin_information',
-			    'request' => serialize( (object) array(
-				    'slug'   => $pluginSlug,
-				    'fields' => array(
-					    'tags'          => false,
-					    'icons'         => true, // that's what will get fetched
-					    'sections'      => false,
-					    'description'   => false,
-					    'tested'        => false,
-					    'requires'      => false,
-					    'rating'        => false,
-					    'downloaded'    => false,
-					    'downloadlink'  => false,
-					    'last_updated'  => false,
-					    'homepage'      => false,
-					    'compatibility' => false,
-					    'ratings'       => false,
-					    'added'         => false,
-					    'donate_link'   => false
-				    ),
-			    ) ),
-		    );
-
-		    $body = @wp_remote_post('http://api.wordpress.org/plugins/info/1.0/', array('body' => $payload));
-
-		    if (is_wp_error($body) || (! (isset($body['body']) && is_serialized($body['body'])))) {
-		        continue;
-		    }
-
-		    $pluginInfo = @unserialize($body['body']);
-
-		    if (! isset($pluginInfo->name, $pluginInfo->icons)) {
-		    	continue;
-		    }
-
-		    if (empty($pluginInfo->icons)) {
-		    	continue;
-		    }
-
-		    $pluginIcon = array_shift($pluginInfo->icons);
-
-		    if ($pluginIcon !== '') {
-			    $activePluginsIcons[$pluginSlug] = $pluginIcon;
-		    }
-	    }
-
-	    if (empty($activePluginsIcons)) {
-	    	return array();
-	    }
-
-	    $expiresInSeconds = 604800; // one week
-
-	    set_transient('wpacu_active_plugins_icons', wp_json_encode($activePluginsIcons), $expiresInSeconds);
-
-	    return $activePluginsIcons;
-    }
-
-	/**
-	 * @return array
-	 */
-	public static function getAllActivePluginsIcons()
-    {
-	    $popularPluginsIcons = array(
-	    	'all-in-one-wp-migration-s3-extension' => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/all-in-one-wp-migration-s3-extension.png',
-		    'elementor'     => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/elementor.svg',
-		    'elementor-pro' => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/elementor-pro.jpg',
-		    'oxygen'        => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/oxygen.png',
-		    'gravityforms'  => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/gravityforms-blue.svg',
-		    'revslider'     => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/revslider.png',
-		    'LayerSlider'   => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/LayerSlider.jpg',
-		    'wpdatatables'  => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/wpdatatables.jpg',
-		    'monarch'       => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/monarch.jpg',
-		    'wp-rocket'     => WPACU_PLUGIN_URL . '/assets/icons/premium-plugins/wp-rocket.png'
-	    );
-
-	    $allActivePluginsIcons = self::getCachedActiveFreePluginsIcons();
-
-	    if ( ! is_array($allActivePluginsIcons) ) {
-		    $allActivePluginsIcons = array();
-	    }
-
-	    foreach (self::getActivePlugins() as $activePlugin) {
-		    if (strpos($activePlugin, '/') !== false) {
-			    list ($pluginSlug) = explode('/', $activePlugin);
-
-			    if (! array_key_exists($pluginSlug, $allActivePluginsIcons) && array_key_exists($pluginSlug, $popularPluginsIcons)) {
-				    $allActivePluginsIcons[$pluginSlug] = $popularPluginsIcons[$pluginSlug];
-			    }
-		    }
-	    }
-
-	    return $allActivePluginsIcons;
-    }
-
-	/**
-	 * @param $themeName
-	 *
-	 * @return array|string
-	 */
-	public static function getThemeIcon($themeName)
-    {
-	    $themesIconsPathToDir = WPACU_PLUGIN_DIR.'/assets/icons/themes/';
-	    $themesIconsUrlDir    = WPACU_PLUGIN_URL.'/assets/icons/themes/';
-
-	    if (! is_dir($themesIconsPathToDir)) {
-	        return array();
-	    }
-
-	    $themeName = strtolower($themeName);
-
-	    $themesIcons = scandir($themesIconsPathToDir);
-
-	    foreach ($themesIcons as $themesIcon) {
-	    	if (strpos($themesIcon, $themeName.'.') !== false) {
-				return $themesIconsUrlDir . $themesIcon;
-		    }
-	    }
-
-	    return '';
-    }
-
-	/**
 	 * @return string
 	 */
 	public static function getStyleTypeAttribute()
 	{
 		$typeAttr = '';
 
-		if ( function_exists( 'is_admin' ) && ! is_admin() &&
-		     function_exists( 'current_theme_supports' ) && ! current_theme_supports( 'html5', 'style' )
+		if ( function_exists( 'is_admin' ) &&
+             function_exists( 'current_theme_supports' ) &&
+             ! is_admin() &&
+             ! current_theme_supports( 'html5', 'style' )
 		) {
 			$typeAttr = " type='text/css'";
 		}
@@ -1692,46 +1094,15 @@ SQL;
     {
 	    $typeAttr = '';
 
-	    if ( function_exists( 'is_admin' ) && ! is_admin() &&
-	         function_exists( 'current_theme_supports' ) && ! current_theme_supports( 'html5', 'script' )
-	    ) {
+	    if ( function_exists( 'is_admin' ) &&
+             function_exists( 'current_theme_supports' ) &&
+             ! is_admin() &&
+             ! current_theme_supports( 'html5', 'script' ) ) {
 		    $typeAttr = " type='text/javascript'";
 	    }
 
 	    return $typeAttr;
     }
-
-	/**
-	 * Triggers only in the front-end view (e.g. Homepage URL, /contact/, /about/ etc.)
-	 * Except the situations below: no page builders edit mode etc.
-	 *
-	 * @return bool
-	 */
-	public static function triggerFrontendOptimization()
-	{
-		// Not when the CSS/JS is fetched
-		if (WPACU_GET_LOADED_ASSETS_ACTION === true) {
-			return false;
-		}
-
-		// "Elementor" Edit Mode
-		if (isset($_GET['elementor-preview']) && $_GET['elementor-preview']) {
-			return false;
-		}
-
-		// "Divi" Edit Mode
-		if (isset($_GET['et_fb']) && $_GET['et_fb']) {
-			return false;
-		}
-
-		// Not within the Dashboard
-		if (is_admin()) {
-			return false;
-		}
-
-		// Default (triggers in most cases)
-		return true;
-	}
 
 	/**
 	 * @return bool
@@ -1751,71 +1122,6 @@ SQL;
 	}
 
 	/**
-	 * Adapted from: https://stackoverflow.com/questions/2510434/format-bytes-to-kilobytes-megabytes-gigabytes
-	 *
-	 * @param $size
-	 * @param int $precision
-	 * @param string $getItIn
-	 * @param bool $includeHtmlTags
-	 *
-	 * @return string
-	 */
-	public static function formatBytes($size, $precision = 2, $getItIn = '', $includeHtmlTags = true)
-	{
-		if ((int)$size === 0) {
-			return (($includeHtmlTags) ? '<span style="vertical-align: middle;" class="dashicons dashicons-warning"></span> ' : '') .
-					__('The file appears to be empty', 'wp-asset-clean-up');
-		}
-
-		// In case a string is passed, make it to float
-		$size = (float)$size;
-
-		// Just for internal usage (no printing in nice format)
-		if ($getItIn === 'bytes') {
-			return $size;
-		}
-
-		if ($getItIn === 'KB') {
-			return round(($size / 1024), $precision);
-		}
-
-		if ($getItIn === 'MB') {
-			return round((($size / 1024) / 1024), $precision);
-		}
-
-		$base = log($size, 1024);
-
-		$suffixes = array('bytes', 'KB', 'MB');
-
-		$floorBase = floor($base);
-
-		if ($floorBase > 2) {
-			$floorBase = 2;
-		}
-
-		$result = round(
-			// 1024 ** ($base - $floorBase) is available only from PHP 5.6+
-			pow(1024, ($base - $floorBase)),
-			$precision
-		);
-
-		$resultForPrint = $result;
-
-		if ($includeHtmlTags && $suffixes[$floorBase] === 'KB' && $floorBase !== 1) {
-			$resultForPrint = str_replace('.', '<span style="font-size: 80%; font-weight: 200;">.', $result).'</span>';
-		}
-
-		$output = $resultForPrint.' '. $suffixes[$floorBase];
-
-		// If KB, also show the MB equivalent
-		if ($floorBase === 1) {
-			$output .= ' ('.number_format($result / 1024, 4).' MB)';
-		}
-
-		return wp_kses($output, array('span' => array('style' => array(), 'class' => array())));
-	}
-
-	/**
 	 * @return string
 	 */
 	public static function getWpRootDirPath()
@@ -1827,7 +1133,7 @@ SQL;
 		$possibleWpConfigFile = dirname(WP_CONTENT_DIR).'/wp-config.php';
 		$possibleIndexFile = dirname(WP_CONTENT_DIR).'/index.php';
 
-		// This is good for hosting accounts under FlyWheel which have a different way of loading WordPress
+		// This is good for hosting accounts under FlyWheel which have a different way of loading WordPress,
 		// and we can't rely on ABSPATH; On most hosting accounts, the condition below would be a match and would work well
 		if (is_file($possibleWpConfigFile) && is_file($possibleIndexFile)) {
 			$GLOBALS['wpacu_wp_root_dir_path'] = dirname(WP_CONTENT_DIR).'/';
@@ -1838,6 +1144,22 @@ SQL;
 		$GLOBALS['wpacu_wp_root_dir_path'] = ABSPATH.'/';
 		return $GLOBALS['wpacu_wp_root_dir_path'];
 	}
+
+    /**
+     * @param $path
+     *
+     * @return string
+     */
+    public static function getWpRootDirPathBasedOnPath($path)
+    {
+        $lastDirWpContent = ltrim(strrchr(WP_CONTENT_DIR, '/'), '/');
+
+        if (strpos($path, $lastDirWpContent) !== false && dirname(WP_CONTENT_DIR) !== ABSPATH) {
+            return dirname(WP_CONTENT_DIR) . '/';
+        }
+
+        return self::getWpRootDirPath(); // default (most common)
+    }
 
 	/**
 	 * @param array $targetDirs
@@ -1878,7 +1200,7 @@ SQL;
 		}
 
 		if ($totalSize > 0) {
-			$totalSizeMb = self::formatBytes( $totalSize, 2, 'MB' );
+			$totalSizeMb = MiscAdmin::formatBytes( $totalSize, 2, 'MB' );
 
 			return array(
 				'total_size'    => $totalSize,
@@ -1919,7 +1241,7 @@ SQL;
 	public static function isWpVersionAtLeast($targetVersion)
 	{
 		global $wp_version;
-		return ( version_compare($wp_version, $targetVersion) >= 0 );
+		return version_compare($wp_version, $targetVersion) >= 0;
 	}
 
 	/**
@@ -1968,40 +1290,6 @@ SQL;
 	}
 
 	/**
-	 * Single value (no multiple RegExes)
-	 *
-	 * @param $regexValue
-	 *
-	 * @return mixed|string
-	 */
-	public static function purifyRegexValue($regexValue)
-	{
-		try {
-			if ( class_exists( '\CleanRegex\Pattern' )
-			     && class_exists( '\SafeRegex\preg' )
-			     && method_exists( '\CleanRegex\Pattern', 'delimitered' )
-			     && method_exists( '\SafeRegex\preg', 'match' ) ) {
-					$cleanRegexPattern = new \CleanRegex\Pattern( $regexValue );
-					$delimiteredValue  = $cleanRegexPattern->delimitered(); // auto-correct it if there's no delimiter
-
-					if ( $delimiteredValue ) {
-						// Tip: https://stackoverflow.com/questions/4440626/how-can-i-validate-regex
-						// Validate it and if it doesn't match, do not add it to the list
-						@preg_match( $delimiteredValue, null );
-
-						if ( preg_last_error() !== PREG_NO_ERROR ) {
-							return $regexValue;
-						}
-
-						}
-				$regexValue = trim($regexValue);
-			}
-		} catch( \Exception $e) {} // if T-Regx library didn't load as it should, the textarea value will be kept as it is
-
-		return $regexValue;
-	}
-
-	/**
 	 * @param $name
 	 * @param $action
 	 *
@@ -2017,79 +1305,26 @@ SQL;
 		$wpacuExecTimeName  = 'wpacu_' . $name . '_exec_time';
 
 		if ($action === 'start') {
-			$startTime = (microtime(true) * 1000);
+			$startTime = microtime(true) * 1000;
+
 			ObjectCache::wpacu_cache_set($wpacuStartTimeName, $startTime, 'wpacu_exec_time');
 		}
 
 		if ($action === 'end' && ($startTime = ObjectCache::wpacu_cache_get($wpacuStartTimeName, 'wpacu_exec_time'))) {
-			// End clock time in seconds
-			$endTime = (microtime(true) * 1000);
-			$scriptExecTime = ($endTime !== $startTime && $endTime > $startTime) ? ($endTime - $startTime) : 0;
+			// End clock time
+			$endTime = microtime(true) * 1000;
+			$scriptExecTime = ( $endTime > $startTime ) ? ( $endTime - $startTime ) : 0;
 
 			// Calculate script execution time
 			// Is there an existing exec time (e.g. from a function called several times)?
 			// Append it to the total execution time
-			if ($scriptExecTimeExisting = ObjectCache::wpacu_cache_get($wpacuExecTimeName, 'wpacu_exec_time')) {
-				$scriptExecTime += $scriptExecTimeExisting;
-			}
+			$scriptExecTimeExisting  = ObjectCache::wpacu_cache_get( $wpacuExecTimeName, 'wpacu_exec_time' ) ?: 0;
+			$scriptExecTimeExisting += $scriptExecTime;
+			ObjectCache::wpacu_cache_set($wpacuExecTimeName, $scriptExecTimeExisting, 'wpacu_exec_time');
 
-			ObjectCache::wpacu_cache_set($wpacuExecTimeName, $scriptExecTime, 'wpacu_exec_time');
 			return $scriptExecTime;
 		}
 
 		return '';
-	}
-
-	/**
-	 * @param $wpacuCacheKey
-	 *
-	 * @return array
-	 */
-	public static function getTimingValues($wpacuCacheKey)
-	{
-		$wpacuExecTiming = ObjectCache::wpacu_cache_get( $wpacuCacheKey, 'wpacu_exec_time' ) ?: 0;
-
-		$wpacuTimingFormatMs = str_replace('.00', '', number_format($wpacuExecTiming, 2));
-		$wpacuTimingFormatS  = str_replace(array('.00', ','), '', number_format(($wpacuExecTiming / 1000), 3));
-
-		return array('ms' => $wpacuTimingFormatMs, 's' => $wpacuTimingFormatS);
-	}
-
-	/**
-	 * @param $timingKey
-	 * @param $htmlSource
-	 *
-	 * @return string|string[]
-	 */
-	public static function printTimingFor($timingKey, $htmlSource)
-	{
-		$wpacuCacheKey       = 'wpacu_' . $timingKey . '_exec_time';
-		$timingValues        = self::getTimingValues( $wpacuCacheKey);
-		$wpacuTimingFormatMs = $timingValues['ms'];
-		$wpacuTimingFormatS  = $timingValues['s'];
-
-		return str_replace(
-			array(
-				'{' . $wpacuCacheKey . '}',
-				'{' . $wpacuCacheKey . '_sec}'
-			),
-			array(
-				$wpacuTimingFormatMs . 'ms',
-				$wpacuTimingFormatS . 's',
-			), // clean it up
-			$htmlSource );
-	}
-
-	/**
-	 * @param $value
-	 *
-	 * @return string
-	 */
-	public static function sanitizeValueForHtmlAttr($value)
-	{
-		// Keep a standard that is used for specific HTML attributes such as "id" and "for"
-		$value = str_replace(array('-', '/', '.'), array('_', '_', '_'), $value);
-
-		return esc_attr(sanitize_title_for_query($value));
 	}
 }

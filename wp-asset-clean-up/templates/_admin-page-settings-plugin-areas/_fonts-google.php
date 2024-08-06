@@ -19,7 +19,6 @@ $ddOptions = array(
 ?>
 <div id="<?php echo esc_attr($tabIdArea); ?>" class="wpacu-settings-tab-content" <?php echo wp_kses($styleTabContent, array('style' => array())); ?>>
 	<h2 class="wpacu-settings-area-title"><?php _e('Google Fonts: Load Optimizer', 'wp-asset-clean-up'); ?></h2>
-
     <div class="wpacu-sub-tabs-wrap"> <!-- Sub-tabs wrap -->
         <!-- Sub-nav menu -->
         <input class="wpacu-nav-input"
@@ -27,7 +26,7 @@ $ddOptions = array(
                type="radio"
                name="wpacu_sub_tab_area"
                value="wpacu-google-fonts-optimize"
-               <?php if (in_array($selectedSubTabArea, array('wpacu-google-fonts-optimize', ''))) { ?>checked="checked"<?php } ?> />
+               <?php if ($selectedSubTabArea === 'wpacu-google-fonts-optimize') { ?>checked="checked"<?php } ?> />
         <label class="wpacu-nav-label"
                for="wpacu-google-fonts-optimize-tab-item">Optimize Font Delivery</label>
 
@@ -41,10 +40,10 @@ $ddOptions = array(
                for="wpacu-google-fonts-remove-tab-item">Remove All</label>
         <!-- /Sub-nav menu -->
 
-        <section class="wpacu-sub-tabs-item" id="wpacu-google-fonts-optimize-tab-item-area">
+        <section class="wpacu-sub-tabs-item <?php if ($selectedSubTabArea === 'wpacu-google-fonts-optimize') { echo 'wpacu-visible'; } ?>" id="wpacu-google-fonts-optimize-tab-item-area">
             <?php include_once __DIR__.'/_fonts-google/_optimize-area.php'; ?>
         </section>
-        <section class="wpacu-sub-tabs-item" id="wpacu-google-fonts-remove-tab-item-area">
+        <section class="wpacu-sub-tabs-item <?php if ($selectedSubTabArea === 'wpacu-google-fonts-remove') { echo 'wpacu-visible'; } ?>" id="wpacu-google-fonts-remove-tab-item-area">
 	        <?php include_once __DIR__.'/_fonts-google/_remove-area.php'; ?>
         </section>
     </div> <!-- /Sub-tabs wrap -->

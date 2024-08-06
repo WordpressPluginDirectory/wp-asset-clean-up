@@ -1,4 +1,6 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp;
 
 /**
@@ -112,37 +114,12 @@ class MetaBoxes
 					$userMetaBoxOption['normal'] = implode(',', array_unique($allNormalMetaBoxes));
 				} elseif ($userMetaBoxOption['normal'] !== '') {
 					$userMetaBoxOption['normal'] .= ','.WPACU_PLUGIN_ID . '_asset_list';
-				} elseif ($userMetaBoxOption['normal'] === '') {
+				} else {
 					$userMetaBoxOption['normal'] .= WPACU_PLUGIN_ID . '_asset_list';
 				}
 
 				update_user_option($user->ID, 'meta-box-order_'.$postType, $userMetaBoxOption, true);
 			}
-		}
-	}
-
-	/**
-	 * @param $postType
-	 */
-	public function addPageOptionsMetaBox($postType)
-	{
-		global $post;
-
-		if (self::isMediaWithPermalinkDeactivated($post)) {
-			return;
-		}
-
-		$obj = $this->showMetaBoxes($postType);
-
-		if (isset($obj->public) && $obj->public > 0) {
-			add_meta_box(
-				WPACU_PLUGIN_ID . '_page_options',
-				WPACU_PLUGIN_TITLE.': '.__('Options', 'wp-asset-clean-up'),
-				array($this, 'renderPageOptionsMetaBoxContent'),
-				$postType,
-				apply_filters('wpacu_page_options_meta_box_context',  'side'),
-				apply_filters('wpacu_page_options_meta_box_priority', 'high')
-			);
 		}
 	}
 
@@ -159,7 +136,7 @@ class MetaBoxes
 
 		$data = array('status' => 1);
 
-		$postId = (isset($post->ID) && $post->ID > 0) ? $post->ID : 0;
+		$postId = ($post->ID > 0) ? $post->ID : 0;
 
 		$isListFetchable = true;
 
@@ -207,18 +184,7 @@ class MetaBoxes
 
 		$data['post_id'] = $postId;
 
-		Main::instance()->parseTemplate('meta-box', $data, true);
-	}
-
-	/**
-	 * This is triggered only in the Edit Mode Dashboard View
-	 * Valid for posts, pages (a page can also be set as the homepage), custom post types
-	 */
-	public function renderPageOptionsMetaBoxContent()
-	{
-		$data = array('page_options' => self::getPageOptions());
-
-		Main::instance()->parseTemplate('meta-box-side-page-options', $data, true);
+		MainAdmin::instance()->parseTemplate('meta-box', $data, true);
 	}
 
 	/**
@@ -239,15 +205,18 @@ class MetaBoxes
 				return @json_decode( $metaPageOptionsJson, ARRAY_A );
 			}
 		} elseif ($type === 'front_page') { // e.g. the latest posts, not a chosen page ID (that's when $type as 'post' is used)
-			$globalPageOptions = get_option(WPACU_PLUGIN_ID . '_global_data');
-
-			if ($globalPageOptions) {
-				$globalPageOptionsList = @json_decode( $globalPageOptions, true );
-
-				if ( isset( $globalPageOptionsList['page_options']['homepage'] ) && ! empty( $globalPageOptionsList['page_options']['homepage'] ) ) {
-					return $globalPageOptionsList['page_options']['homepage'];
-				}
+			if (isset($GLOBALS['wpacu_get_page_options_front_page'])) {
+				return $GLOBALS['wpacu_get_page_options_front_page'];
 			}
+
+            $globalPageOptionsList = wpacuGetGlobalData();
+
+            if ( ! empty( $globalPageOptionsList['page_options']['homepage'] ) ) {
+                $GLOBALS['wpacu_get_page_options_front_page'] = $globalPageOptionsList['page_options']['homepage'];
+                return $globalPageOptionsList['page_options']['homepage'];
+            }
+
+			$GLOBALS['wpacu_get_page_options_front_page'] = array();
 		}
 
 		return array();
@@ -258,9 +227,9 @@ class MetaBoxes
 	 */
 	public static function hasNoFrontendOptimizationPageOption()
 	{
-		$isSingularPage = defined('WPACU_CURRENT_PAGE_ID') && WPACU_CURRENT_PAGE_ID > 0 && is_singular();
+		$isSingularPage = (int)wpacuGetConstant('WPACU_CURRENT_PAGE_ID') > 0 && MainFront::isSingularPage();
 
-		if ($isSingularPage || Misc::isHomePage()) {
+		if ($isSingularPage || MainFront::isHomePage()) {
 			if ($isSingularPage) {
 				$pageOptions = self::getPageOptions( WPACU_CURRENT_PAGE_ID ); // Singular page
 			} else {
@@ -326,12 +295,18 @@ class MetaBoxes
 	 * @param string $post
 	 *
 	 * @return bool
-	 */
+     *
+     * @noinspection BadExceptionsProcessingInspection
+     */
 	public static function isMediaWithPermalinkDeactivated($post = '')
 	{
 		if ($post === '') {
 			$postTypeToCheck = 'attachment';
 		} else {
+            if ( ! isset($post->ID) ) {
+                return false;
+            }
+
 			$postTypeToCheck = get_post_type($post->ID);
 		}
 

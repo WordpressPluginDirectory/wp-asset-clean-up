@@ -1,7 +1,10 @@
 <?php
+/** @noinspection MultipleReturnStatementsInspection */
+
 namespace WpAssetCleanUp\OptimiseAssets;
 
 use WpAssetCleanUp\Main;
+use WpAssetCleanUp\MainFront;
 use WpAssetCleanUp\Menu;
 use WpAssetCleanUp\MetaBoxes;
 use WpAssetCleanUp\Misc;
@@ -19,7 +22,11 @@ class MinifyJs
 	 */
 	public static function applyMinification($jsContent)
 	{
-		if (class_exists('\MatthiasMullie\Minify\JS')) {
+		if ( ! class_exists('\MatthiasMullieWpacu\Minify\JS') ) {
+                require_once WPACU_PLUGIN_DIR . '/vendor/autoload.php';
+            }
+
+			if (class_exists('\MatthiasMullieWpacu\Minify\JS')) {
 				$sha1OriginalContent = sha1($jsContent);
 				$checkForAlreadyMinifiedShaOne = mb_strlen($jsContent) > 40000;
 
@@ -33,7 +40,10 @@ class MinifyJs
 				// Minify it
 				$alreadyMinified = false; // default
 
-				$minifier = new \MatthiasMullie\Minify\JS($jsContent);
+				$minifier = new \MatthiasMullieWpacu\Minify\JS();
+                $minifier->setParamType('content');
+                $minifier->add($jsContent);
+
 				$minifiedContent = trim($minifier->minify());
 
 				if (trim($minifiedContent) === trim(trim($jsContent, ';'))) {
@@ -62,7 +72,7 @@ class MinifyJs
 	public static function skipMinify($src, $handle = '')
 	{
 		// Things like WP Fastest Cache Toolbar JS shouldn't be minified and take up space on the server
-		if ($handle !== '' && in_array($handle, Main::instance()->skipAssets['scripts'])) {
+		if ($handle !== '' && in_array($handle, MainFront::instance()->getSkipAssets('scripts'))) {
 			return true;
 		}
 
@@ -96,8 +106,14 @@ class MinifyJs
 			// Minifying them causes some errors, so better to leave them load as they are
 			'#/wp-content/plugins/google-site-kit/#',
 
+			// GiveWP: the files are already optimized (they just have comments once in a while)
+			'#/wp-content/plugins/give/assets/dist/js/#',
+
             // TranslatePress Multilingual
             '#/translatepress-multilingual/assets/js/trp-editor.js#',
+
+			// Query Monitor
+			'#/query-monitor/assets/query-monitor.js#'
 
 			);
 
@@ -127,15 +143,21 @@ class MinifyJs
 	}
 
 	/**
+     * This is for minifying the inline tag and/or alter it in case the following options were enabled:
+     * 1) "font-display" to be set in case Google Fonts are loading in JS content
+     * 2) Strip any references to Google Fonts in case the option remove the Google Fonts was enabled
+     *
 	 * @param $htmlSource
 	 *
 	 * @return mixed|string
 	 */
-	public static function minifyInlineScriptTags($htmlSource)
+	public static function minifyOrAlterInlineScriptTags($htmlSource)
 	{
 		if (stripos($htmlSource, '<script') === false) {
 			return $htmlSource; // no SCRIPT tags, hmm
 		}
+
+        $doMinifyInlineTag = in_array(Main::instance()->settings['minify_loaded_js_for'], array('inline', 'all')) && self::isMinifyJsEnabled();
 
 		$skipTagsContaining = array_map( static function ( $toMatch ) {
 			return preg_quote($toMatch, '/');
@@ -144,15 +166,11 @@ class MinifyJs
 			'/* <![CDATA[ */', // added via wp_localize_script()
 			'wpacu-google-fonts-async-load',
 			'wpacu-preload-async-css-fallback',
-			/* [wpacu_pro] */'data-wpacu-inline-js-file',/* [/wpacu_pro] */
 			'document.body.prepend(wpacuLinkTag',
 			'var wc_product_block_data = JSON.parse( decodeURIComponent(',
 			'/(^|\s)(no-)?customize-support(?=\s|$)/', // WP Core
 			'b[c] += ( window.postMessage && request ? \' \' : \' no-\' ) + cs;', // WP Core
-			'data-wpacu-own-inline-script', // Only shown to the admin, irrelevant for any optimization (save resources)
-			// [wpacu_pro]
-			'data-wpacu-inline-js-file', // already minified/optimized since the INLINE was generated from the cached file
-			// [/wpacu_pro]
+			'data-wpacu-own-inline-script' // Only shown to the admin, irrelevant for any optimization (save resources)
 		));
 
 		// Do not perform another \DOMDocument call if it was done already somewhere else (e.g. CombineJs)
@@ -169,28 +187,53 @@ class MinifyJs
 				if (isset($matchedScript[0]) && $matchedScript[0]) {
 					$originalTag = $matchedScript[0];
 
-					if (strpos($originalTag, 'src=') && strtolower(substr($originalTag, -strlen('></script>'))) === strtolower('></script>')) {
-						// Only inline SCRIPT tags allowed
-						continue;
-					}
-
-					// No need to use extra resources as the tag is already minified
-					if ( preg_match( '/(' . implode( '|', $skipTagsContaining ) . ')/', $originalTag ) ) {
-						continue;
-					}
+                    if (strncasecmp($originalTag, '<script src=', 12) === 0 || strncasecmp($originalTag, '<script type="application', 25) === 0) {
+                        continue;
+                    }
 
 					// Only 'text/javascript' type is allowed for minification
-					$scriptType = Misc::getValueFromTag($originalTag, 'type') ?: 'text/javascript'; // default
+                    // If the tag starts with <script> there's no point to do further checks
+                    if (strncasecmp($originalTag, '<script>', 8) !== 0) {
+                        $scriptType = 'text/javascript'; // default
 
-					if ($scriptType !== 'text/javascript') {
-						continue;
-					}
+                        if (strpos($originalTag, ' type') !== false) {
+                            $scriptType = Misc::getValueFromTag($originalTag, 'type', 'dom_with_fallback') ?: 'text/javascript';
+                        }
 
-					$tagOpen     = $matchedScript[1];
+                        if ($scriptType !== 'text/javascript') {
+                            continue;
+                        }
+
+                        $scriptAltType = '';
+
+                        if (strpos($originalTag, 'data-alt-type') !== false) {
+                            $scriptAltType = Misc::getValueFromTag($originalTag, 'data-alt-type', 'dom_with_fallback');
+                        }
+
+                        if ($scriptAltType && $scriptAltType !== 'text/javascript') {
+                            continue;
+                        }
+                    }
+
+                    if (strpos($originalTag, 'src=') !== false && Misc::endsWith($originalTag, '-js\'></script>')) {
+                        continue;
+                    }
+
+                    // No need to use extra resources as the tag is already minified
+                    if ( preg_match( '/(' . implode( '|', $skipTagsContaining ) . ')/', $originalTag ) ) {
+                        continue;
+                    }
+
+                    if (Misc::getValueFromTag($originalTag, 'src', 'dom_with_fallback') && strtolower(substr($originalTag, -strlen('></script>'))) === strtolower('></script>')) {
+                        // Only inline SCRIPT tags allowed
+                        continue;
+                    }
+
+					$tagOpen = $matchedScript[1];
 					$withTagOpenStripped = substr($originalTag, strlen($tagOpen));
 					$originalTagContents = substr($withTagOpenStripped, 0, -strlen('</script>'));
 
-					$newTagContents = OptimizeJs::maybeAlterContentForInlineScriptTag( $originalTagContents, true );
+					$newTagContents = OptimizeJs::maybeAlterContentForInlineScriptTag( $originalTagContents, $doMinifyInlineTag );
 
 					if ( $newTagContents !== $originalTagContents ) {
 						$htmlSource = str_ireplace( '>' . $originalTagContents . '</script', '>' . $newTagContents . '</script', $htmlSource );
@@ -227,9 +270,9 @@ class MinifyJs
 			return false;
 		}
 
-		$isSingularPage = defined('WPACU_CURRENT_PAGE_ID') && WPACU_CURRENT_PAGE_ID > 0 && is_singular();
+		$isSingularPage = (int)wpacuGetConstant('WPACU_CURRENT_PAGE_ID') > 0 && MainFront::isSingularPage();
 
-		if ($isSingularPage || Misc::isHomePage()) {
+		if ($isSingularPage || MainFront::isHomePage()) {
 			// If "Do not minify JS on this page" is checked in "Asset CleanUp: Options" side meta box
 			if ($isSingularPage) {
 				$pageOptions = MetaBoxes::getPageOptions( WPACU_CURRENT_PAGE_ID ); // Singular page
@@ -257,10 +300,10 @@ class MinifyJs
 	 */
 	public static function isMinifyJsEnabledChecked($value)
 	{
-		if (! defined('WPACU_IS_MINIFY_JS_ENABLED')) {
-			if ($value === 'true') {
+		if ( ! defined('WPACU_IS_MINIFY_JS_ENABLED') ) {
+			if ( $value === 'true' ) {
 				define( 'WPACU_IS_MINIFY_JS_ENABLED', true );
-			} elseif ($value === 'false') {
+			} elseif ( $value === 'false' ) {
 				define( 'WPACU_IS_MINIFY_JS_ENABLED', false );
 			}
 		}

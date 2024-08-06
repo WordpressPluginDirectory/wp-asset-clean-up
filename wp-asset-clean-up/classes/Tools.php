@@ -95,21 +95,21 @@ class Tools
 
 		if (isset($_GET['page']) && $_GET['page'] === WPACU_PLUGIN_ID. '_tools') {
 			// "Import" Completed
-			if (Misc::getVar('get', 'wpacu_import_done') && $resetDoneListArray = get_transient('wpacu_import_done')) {
+			if (Misc::getVar('get', 'wpacu_import_done') && $resetDoneListArray = get_transient(WPACU_PLUGIN_ID . '_import_done')) {
 				if (! is_array($resetDoneListArray)) {
 					return;
 				}
 
 				$this->data['import_done_list'] = $resetDoneListArray;
 
-				delete_transient('wpacu_import_done');
+				delete_transient(WPACU_PLUGIN_ID . '_import_done');
 
 				// Show the confirmation that the import was completed
 				add_action('wpacu_admin_notices', array($this, 'importDone'));
 			}
 
 			// "Reset" Completed
-			if (Misc::getVar('get', 'wpacu_reset_done') && $resetDoneInfo = get_transient('wpacu_reset_done')) {
+			if (Misc::getVar('get', 'wpacu_reset_done') && $resetDoneInfo = get_transient(WPACU_PLUGIN_ID . '_reset_done')) {
 				$resetDoneInfoArray = @json_decode($resetDoneInfo, ARRAY_A);
 
 				if (! is_array($resetDoneInfoArray)) {
@@ -120,7 +120,7 @@ class Tools
 				$this->licenseDataRemoved  = isset($resetDoneInfoArray['license_data_removed']) ? $resetDoneInfoArray['license_data_removed'] : '';
 				$this->cachedAssetsRemoved = isset($resetDoneInfoArray['cached_assets_removed']) ? $resetDoneInfoArray['cached_assets_removed'] : '';
 
-				delete_transient('wpacu_reset_done');
+				delete_transient(WPACU_PLUGIN_ID . '_reset_done');
 
 				// Show the confirmation that the reset was completed
 				add_action('wpacu_admin_notices', array($this, 'resetDone'));
@@ -143,7 +143,7 @@ class Tools
 			$this->data['error_log'] = $this->errorLogsData;
 		}
 
-		Main::instance()->parseTemplate('admin-page-tools', $this->data, true);
+		MainAdmin::instance()->parseTemplate('admin-page-tools', $this->data, true);
 	}
 
 	/**
@@ -183,7 +183,10 @@ class Tools
 
 	/**
 	 * @return string
-	 */
+     *
+     * @noinspection PhpUndefinedConstantInspection
+     * @noinspection PhpUndefinedFieldInspection
+     */
 	public function getSystemInfo()
     {
 	    global $wpdb;
@@ -257,7 +260,7 @@ class Tools
 	    if ( ! empty( $muplugins ) && count( $muplugins ) > 0 ) {
 		    $return .= "\n" . '# Must-Use Plugins ("mu-plugins" directory)' . "\n";
 
-		    foreach ( $muplugins as $plugin => $plugin_data ) {
+		    foreach ( $muplugins as $plugin_data ) {
 			    $return .= $plugin_data['Name'] . ': ' . $plugin_data['Version'] . "\n";
 		    }
 	    }
@@ -506,7 +509,7 @@ SQL;
     {
 	    $arrayFromJson = @json_decode($maybeJsonValue, true);
 
-	    if (Misc::jsonLastError() !== JSON_ERROR_NONE) {
+	    if (wpacuJsonLastError() !== JSON_ERROR_NONE) {
 		    return $maybeJsonValue;
 	    }
 
@@ -573,7 +576,7 @@ SQL;
 	public function doReset()
 	{
 		// Several security checks before proceeding with the chosen action
-		if (! Misc::getVar('post', 'wpacu_tools_reset_nonce')) {
+		if ( ! Misc::getVar('post', 'wpacu_tools_reset_nonce') ) {
 			return;
 		}
 
@@ -581,18 +584,18 @@ SQL;
 
 		$wpacuResetValue = Misc::getVar('post', 'wpacu-reset', false);
 
-		if (! $wpacuResetValue) {
+		if ( ! $wpacuResetValue ) {
 			exit('Error: Field not found, the action is not valid!');
 		}
 
 		// Has to be confirmed
 		$wpacuConfirmedValue = Misc::getVar('post', 'wpacu-action-confirmed', false);
 
-		if ($wpacuConfirmedValue !== 'yes') {
+		if ( $wpacuConfirmedValue !== 'yes' ) {
 			exit('Error: Action needs to be confirmed.');
 		}
 
-		if (! Menu::userCanManageAssets()) {
+		if ( ! Menu::userCanManageAssets() ) {
 			exit();
 		}
 
@@ -604,7 +607,23 @@ SQL;
 
 		if ($wpacuResetValue === 'reset_settings') {
 			delete_option($wpacuPluginId.'_settings');
+
+            $wpacuSettingsAdmin = new SettingsAdmin();
+            $wpacuSettingsAdmin->updateSettingsInDbWithDefaultValues();
 		}
+
+        if ($wpacuResetValue === 'reset_critical_css') {
+		    $wpacuGetAllCriticalCssOptions = <<<SQL
+SELECT option_name FROM `{$wpdb->prefix}options` WHERE option_name LIKE '{$wpacuPluginId}_critical_css_%'
+SQL;
+			$wpacuAnyCriticalCssOptions = $wpdb->get_col($wpacuGetAllCriticalCssOptions);
+
+			if (! empty($wpacuAnyCriticalCssOptions)) {
+			    foreach ($wpacuAnyCriticalCssOptions as $wpacuCriticalCssOption) {
+			        delete_option($wpacuCriticalCssOption);
+                }
+            }
+        }
 
         if (in_array($wpacuResetValue, array('reset_everything', 'reset_everything_except_settings'))) {
 			// `usermeta` and `termmeta` might have traces from the Pro version (if ever used)
@@ -697,6 +716,11 @@ SQL;
 
 			// Remove Asset CleanUp (Pro)'s cache transients
             $this->clearAllCacheTransients();
+
+            if ( $wpacuResetValue === 'reset_everything' && ! get_option(WPACU_PLUGIN_ID . '_settings') ) {
+                $wpacuSettingsAdmin = new SettingsAdmin();
+                $wpacuSettingsAdmin->updateSettingsInDbWithDefaultValues();
+            }
 		}
 
 		// Also make 'jQuery Migrate' and 'Comment Reply' core files to load again
@@ -707,7 +731,7 @@ SQL;
             array('jquery-migrate' => 'remove', 'comment-reply' => 'remove')
         );
 
-        set_transient('wpacu_reset_done',
+        set_transient(WPACU_PLUGIN_ID . '_reset_done',
 	        wp_json_encode(array(
 	                'reset_choice'          => $this->resetChoice,
 	                'license_data_removed'  => $this->licenseDataRemoved,
@@ -763,6 +787,10 @@ SQL;
 		if ($this->resetChoice === 'reset_settings') {
 			$msg = __('All the settings were reset to their default values.', 'wp-asset-clean-up');
 		}
+
+        if ($this->resetChoice === 'reset_critical_css') {
+		    $msg = __('The critical CSS information has been removed and restored to the way it was in the beginning.', 'wp-asset-clean-up-pro');
+        }
 
         if ($this->resetChoice === 'reset_everything_except_settings') {
 			$msg = __('Everything except the "Settings" was reset (including page &amp; bulk unloads, load exceptions).', 'wp-asset-clean-up');
@@ -826,6 +854,10 @@ SQL;
 
             if ($importedKey === 'posts_metas') {
 	            $importedMessage .= '<li>'.esc_html__('Posts, Pages &amp; Custom Post Types: Rules &amp; Page Options (Side Meta Box)', 'wp-asset-clean-up').'</li>';
+            }
+
+            if ($importedKey === 'critical_css_options') {
+                $importedMessage .= '<li>'.esc_html__('Critical CSS', 'wp-asset-clean-up').'</li>';
             }
         }
 

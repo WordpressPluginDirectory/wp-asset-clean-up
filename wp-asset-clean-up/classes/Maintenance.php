@@ -1,4 +1,6 @@
 <?php
+/** @noinspection OffsetOperationsInspection */
+
 namespace WpAssetCleanUp;
 
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
@@ -32,7 +34,8 @@ class Maintenance
 				Maintenance::combineNewOptionUpdate(); // Since v1.1.7.3 (Pro) & v1.3.6.4 (Lite)
 			}
 		});
-	}
+
+		}
 
 	/**
 	 * Schedule events
@@ -89,12 +92,12 @@ class Maintenance
 	{
 		// WordPress Version below 5.5? Skip appending CSS/JS code to the combine CSS/JS list
 		if ( ! Misc::isWpVersionAtLeast('5.5') ) {
-			$settingsClass = new Settings();
+			$settingsAdminClass = new SettingsAdmin();
 			$optionsToUpdate = array(
 				'_combine_loaded_css_append_handle_extra' => '',
 				'_combine_loaded_js_append_handle_extra'  => ''
 			);
-			$settingsClass->updateOption(array_keys($optionsToUpdate), array_values($optionsToUpdate));
+            $settingsAdminClass->updateOption(array_keys($optionsToUpdate), array_values($optionsToUpdate));
 
 			if ($isDebug) {
 				echo 'The WordPress version is below 5.5, thus there is no appending of the inline CSS/JS code to the combine CSS/JS list';
@@ -104,7 +107,9 @@ class Maintenance
 			// to prevent the appending of the inline CSS/JS code that is likely the culprit of so many files
 			$settingsClass = new Settings();
 			$settings      = $settingsClass->getAll( true );
-			$settingsClass::toggleAppendInlineAssocCodeHiddenSettings( $settings, true, $isDebug );
+
+            $settingsAdminClass = new SettingsAdmin();
+            $settingsAdminClass::toggleAppendInlineAssocCodeHiddenSettings( $settings, true, $isDebug );
 		}
 
 		if ($isDebug) {
@@ -118,7 +123,7 @@ class Maintenance
 	public static function clearCacheConditionally($isDebug = false)
 	{
 		// Clear caching if it wasn't cleared in the past 24 hours (e.g. the admin hasn't used the plugin for a while)
-		$wpacuLastClearCache = get_transient('wpacu_last_clear_cache');
+		$wpacuLastClearCache = get_transient(WPACU_PLUGIN_ID . '_last_clear_cache');
 
 		if ($isDebug) {
 			echo 'Cache cleared last time: '.$wpacuLastClearCache.'<br />';
@@ -150,7 +155,7 @@ class Maintenance
 		$handlesToClearFromInfo = array('styles' => array(), 'scripts' => array());
 
 		foreach (array('styles', 'scripts') as $assetType) {
-			if ( isset( $allAssetsFromInfoArea[$assetType] ) && ! empty( $allAssetsFromInfoArea[$assetType] ) ) {
+			if ( ! empty( $allAssetsFromInfoArea[$assetType] ) ) {
 				foreach ( array_keys( $allAssetsFromInfoArea[$assetType] ) as $assetHandle ) {
 					if ( ! isset($allAssetsWithAtLeastOneRule[$assetType][$assetHandle]) ) { // not found in $allAssetsWithAtLeastOneRule? Add it to the clear list
 						$handlesToClearFromInfo[$assetType][] = $assetHandle;
@@ -175,15 +180,17 @@ class Maintenance
 		if ( ($pluginSettings['combine_loaded_css'] === 'for_admin' ||
 		     (isset($pluginSettings['combine_loaded_css_for_admin_only']) && $pluginSettings['combine_loaded_css_for_admin_only'] == 1) )
 		    && Menu::userCanManageAssets() ) {
-			$settingsClass->updateOption('combine_loaded_css', '');
-			$settingsClass->updateOption('combine_loaded_css_for_admin_only', '');
+            $settingsAdminClass = new SettingsAdmin();
+            $settingsAdminClass->updateOption('combine_loaded_css', '');
+            $settingsAdminClass->updateOption('combine_loaded_css_for_admin_only', '');
 		}
 
 		if ( ($pluginSettings['combine_loaded_js'] === 'for_admin' ||
 		     (isset($pluginSettings['combine_loaded_js_for_admin_only']) && $pluginSettings['combine_loaded_js_for_admin_only'] == 1) )
 		    && Menu::userCanManageAssets() ) {
-			$settingsClass->updateOption('combine_loaded_js', '');
-			$settingsClass->updateOption('combine_loaded_js_for_admin_only', '');
+            $settingsAdminClass = new SettingsAdmin();
+            $settingsAdminClass->updateOption('combine_loaded_js', '');
+            $settingsAdminClass->updateOption('combine_loaded_js_for_admin_only', '');
 		}
 	}
 
@@ -247,7 +254,7 @@ class Maintenance
 		}
 
 		/*
-		 * Any for all pages of a certain post type? (e.g. in all WooCommerce "product" pages)
+		 * Any for all pages of a certain post type? (e.g., in all WooCommerce "product" pages)
 		 */
 		$wpacuPostTypeLoadExceptions = get_option(WPACU_PLUGIN_ID . '_post_type_load_exceptions');
 
@@ -281,7 +288,7 @@ class Maintenance
 			$wpacuGetValuesQuery = <<<SQL
 SELECT * FROM `{$tableName}` WHERE meta_key='_{$wpacuPluginId}_load_exceptions'
 SQL;
-			$wpacuMetaData       = $wpdb->get_results( $wpacuGetValuesQuery, ARRAY_A );
+			$wpacuMetaData = $wpdb->get_results( $wpacuGetValuesQuery, ARRAY_A );
 
 			foreach ( $wpacuMetaData as $wpacuValues ) {
 				$decodedValues = @json_decode( $wpacuValues['meta_value'], ARRAY_A );
@@ -338,26 +345,22 @@ SQL;
 		/*
 		 * Any (RegEx / Logged-in User) load exceptions?
 		*/
-		$dbListJson = get_option(WPACU_PLUGIN_ID . '_global_data');
 		$globalKeys = array('load_regex', 'load_it_logged_in');
+        $dbList = wpacuGetGlobalData();
 
 		foreach ($globalKeys as $globalKey) {
-			if ( $dbListJson ) {
-				$dbList = @json_decode( $dbListJson, ARRAY_A );
+            $targetArray = isset( $dbList[ $assetType ][ $globalKey ] ) &&
+                           is_array( $dbList[ $assetType ][ $globalKey ] )
+                ? $dbList[ $assetType ][ $globalKey ] : array();
 
-				$targetArray = isset( $dbList[ $assetType ][ $globalKey ] ) &&
-				               is_array( $dbList[ $assetType ][ $globalKey ] )
-					? $dbList[ $assetType ][ $globalKey ] : array();
+            if ( array_key_exists( $assetHandle, $targetArray ) ) {
+                unset( $dbList[ $assetType ][ $globalKey ][ $assetHandle ] ); // clear the exception
 
-				if ( array_key_exists( $assetHandle, $targetArray ) ) {
-					unset( $dbList[ $assetType ][ $globalKey ][ $assetHandle ] ); // clear the exception
-
-					Misc::addUpdateOption(
-						WPACU_PLUGIN_ID . '_global_data',
-						wp_json_encode( Misc::filterList( $dbList ) )
-					);
-				}
-			}
+                Misc::addUpdateOption(
+                    WPACU_PLUGIN_ID . '_global_data',
+                    wp_json_encode( Misc::filterList( $dbList ) )
+                );
+            }
 		}
 	}
 
@@ -374,8 +377,7 @@ SQL;
 		 * Table: WPACU_PLUGIN_ID . '_global_data'
 		 * Global (Site-wide) Rules: Preloading, Position changing, Unload via RegEx, etc.
 		 */
-		$wpacuGlobalData = get_option(WPACU_PLUGIN_ID . '_global_data');
-		$wpacuGlobalDataArray = @json_decode($wpacuGlobalData, ARRAY_A);
+		$wpacuGlobalDataArray = wpacuGetGlobalData();
 
 		foreach ( array(
 			'404',
@@ -390,7 +392,7 @@ SQL;
 			'preloads',
 			'search',
 			'unload_regex' ) as $dataType ) {
-			if ( isset( $wpacuGlobalDataArray[ $assetType ][ $dataType ] ) && ! empty( $wpacuGlobalDataArray[ $assetType ][ $dataType ] ) && array_key_exists($assetHandle,  $wpacuGlobalDataArray[ $assetType ][ $dataType ]) ) {
+			if ( ! empty( $wpacuGlobalDataArray[ $assetType ][ $dataType ] ) && array_key_exists($assetHandle,  $wpacuGlobalDataArray[ $assetType ][ $dataType ]) ) {
 				unset( $wpacuGlobalDataArray[ $assetType ][ $dataType ][ $assetHandle ]);
 			}
 		}
@@ -407,7 +409,7 @@ SQL;
 		$wpacuGlobalUnloadData = get_option(WPACU_PLUGIN_ID . '_global_unload');
 		$wpacuGlobalUnloadDataArray = @json_decode($wpacuGlobalUnloadData, ARRAY_A);
 
-		if (isset($wpacuGlobalUnloadDataArray[$assetType]) && ! empty($wpacuGlobalUnloadDataArray[$assetType]) && in_array($assetHandle, $wpacuGlobalUnloadDataArray[$assetType])) {
+		if ( ! empty($wpacuGlobalUnloadDataArray[$assetType]) && in_array($assetHandle, $wpacuGlobalUnloadDataArray[$assetType]) ) {
 			$targetKey = array_search($assetHandle, $wpacuGlobalUnloadDataArray[$assetType]);
 			unset($wpacuGlobalUnloadDataArray[$assetType][$targetKey]);
 
@@ -424,7 +426,7 @@ SQL;
 		$wpacuBulkUnloadData = get_option(WPACU_PLUGIN_ID . '_bulk_unload');
 		$wpacuBulkUnloadDataArray = @json_decode($wpacuBulkUnloadData, ARRAY_A);
 
-		if (isset($wpacuBulkUnloadDataArray[$assetType]) && ! empty($wpacuBulkUnloadDataArray[$assetType])) {
+		if ( ! empty($wpacuBulkUnloadDataArray[$assetType]) ) {
 			foreach ($wpacuBulkUnloadDataArray[$assetType] as $unloadBulkType => $unloadBulkValues) {
 				// $unloadBulkType could be 'post_type', 'date', '404', 'taxonomy', 'search', 'custom_post_type_archive_[custom_post_type]'
 				if ($unloadBulkType === 'post_type') {
@@ -432,25 +434,6 @@ SQL;
 						if (in_array($assetHandle, $assetHandles)) {
 							$targetKey = array_search($assetHandle, $assetHandles);
 							unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType][$postType][$targetKey]);
-						}
-					}
-				} elseif (in_array($unloadBulkType, array('date', '404', 'search')) || (strpos($unloadBulkType, 'custom_post_type_archive_') !== false)) {
-					if (in_array($assetHandle, $unloadBulkValues)) {
-						$targetKey = array_search($assetHandle, $unloadBulkValues);
-						unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType][$targetKey]);
-					}
-				} elseif ($unloadBulkType === 'taxonomy') {
-					foreach ($unloadBulkValues as $taxonomyType => $assetHandles) {
-						if (in_array($assetHandle, $assetHandles)) {
-							$targetKey = array_search($assetHandle, $assetHandles);
-							unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType][$taxonomyType][$targetKey]);
-						}
-					}
-				} elseif ($unloadBulkType === 'author' && isset($unloadBulkValues['all']) && ! empty($unloadBulkValues['all'])) {
-					foreach ($unloadBulkValues['all'] as $assetHandles) {
-						if (in_array($assetHandle, $assetHandles)) {
-							$targetKey = array_search($assetHandle, $assetHandles);
-							unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType]['all'][$targetKey]);
 						}
 					}
 				}
@@ -471,7 +454,7 @@ SQL;
 		if ($wpacuFrontPageUnloads) {
 			$wpacuFrontPageUnloadsArray = @json_decode( $wpacuFrontPageUnloads, ARRAY_A );
 
-			if ( isset( $wpacuFrontPageUnloadsArray[$assetType] ) && ! empty( $wpacuFrontPageUnloadsArray[$assetType] ) && in_array( $assetHandle, $wpacuFrontPageUnloadsArray[$assetType] ) ) {
+			if ( ! empty( $wpacuFrontPageUnloadsArray[$assetType] ) && in_array( $assetHandle, $wpacuFrontPageUnloadsArray[$assetType] ) ) {
 				$targetKey = array_search($assetHandle, $wpacuFrontPageUnloadsArray[$assetType]);
 				unset($wpacuFrontPageUnloadsArray[$assetType][$targetKey]);
 			}
@@ -512,6 +495,7 @@ SQL;
 		 *
 		 */
 		global $wpdb;
+
 		$wpacuPluginId = WPACU_PLUGIN_ID;
 
 		foreach (array($wpdb->postmeta, $wpdb->termmeta, $wpdb->usermeta) as $tableName) {
@@ -562,7 +546,7 @@ SQL;
 	}
 
 	/**
-	 * Remove all unload rules apart from the site-wide one
+	 * Remove unloading rules apart from the site-wide one
 	 *
 	 * @param $assetHandle
 	 * @param $assetType
@@ -596,7 +580,7 @@ SQL;
 		$wpacuBulkUnloadData = get_option(WPACU_PLUGIN_ID . '_bulk_unload');
 		$wpacuBulkUnloadDataArray = @json_decode($wpacuBulkUnloadData, ARRAY_A);
 
-		if (isset($wpacuBulkUnloadDataArray[$assetType]) && ! empty($wpacuBulkUnloadDataArray[$assetType])) {
+		if ( ! empty($wpacuBulkUnloadDataArray[$assetType]) ) {
 			foreach ($wpacuBulkUnloadDataArray[$assetType] as $unloadBulkType => $unloadBulkValues) {
 				// $unloadBulkType could be 'post_type', 'date', '404', 'taxonomy', 'search', 'custom_post_type_archive_[custom_post_type]'
 				if ($unloadBulkType === 'post_type') {
@@ -606,34 +590,7 @@ SQL;
 							unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType][$postType][$targetKey]);
 						}
 					}
-				// [Any Pro left overs]
-				} elseif ($unloadBulkType === 'post_type_via_tax') {
-					foreach ($unloadBulkValues as $postType => $assetHandlesValues) {
-						if (isset($assetHandlesValues[$assetHandle]) && is_array($assetHandlesValues[$assetHandle])) {
-							unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType][$postType][$assetHandle]);
-						}
-					}
-				} elseif (in_array($unloadBulkType, array('date', '404', 'search')) || (strpos($unloadBulkType, 'custom_post_type_archive_') !== false)) {
-					if (in_array($assetHandle, $unloadBulkValues)) {
-						$targetKey = array_search($assetHandle, $unloadBulkValues);
-						unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType][$targetKey]);
-					}
-				} elseif ($unloadBulkType === 'taxonomy') {
-					foreach ($unloadBulkValues as $taxonomyType => $assetHandles) {
-						if (in_array($assetHandle, $assetHandles)) {
-							$targetKey = array_search($assetHandle, $assetHandles);
-							unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType][$taxonomyType][$targetKey]);
-						}
-					}
-				} elseif ($unloadBulkType === 'author' && isset($unloadBulkValues['all']) && ! empty($unloadBulkValues['all'])) {
-					foreach ($unloadBulkValues['all'] as $assetHandles) {
-						if (in_array($assetHandle, $assetHandles)) {
-							$targetKey = array_search($assetHandle, $assetHandles);
-							unset($wpacuBulkUnloadDataArray[$assetType][$unloadBulkType]['all'][$targetKey]);
-						}
-					}
 				}
-				// [/Any Pro left overs]
 			}
 
 			Misc::addUpdateOption(
@@ -648,13 +605,14 @@ SQL;
 		 *
 		 */
 		global $wpdb;
+
 		$wpacuPluginId = WPACU_PLUGIN_ID;
 
 		foreach (array($wpdb->postmeta, $wpdb->termmeta, $wpdb->usermeta) as $tableName) {
 			$wpacuGetValuesQuery = <<<SQL
 SELECT * FROM `{$tableName}` WHERE meta_key='_{$wpacuPluginId}_no_load'
 SQL;
-			$wpacuMetaData       = $wpdb->get_results( $wpacuGetValuesQuery, ARRAY_A );
+			$wpacuMetaData = $wpdb->get_results( $wpacuGetValuesQuery, ARRAY_A );
 
 			foreach ( $wpacuMetaData as $wpacuValues ) {
 				$decodedValues = @json_decode( $wpacuValues['meta_value'], ARRAY_A );
@@ -679,11 +637,10 @@ SQL;
 		 * Table: WPACU_PLUGIN_ID . '_global_data'
 		 * Global (Site-wide) Rules: Unload via RegEx
 		 */
-		$wpacuGlobalData = get_option(WPACU_PLUGIN_ID . '_global_data');
-		$wpacuGlobalDataArray = @json_decode($wpacuGlobalData, ARRAY_A);
+		$wpacuGlobalDataArray = wpacuGetGlobalData();
 
 		foreach ( array( 'unload_regex' ) as $dataType ) {
-			if ( isset( $wpacuGlobalDataArray[ $assetType ][ $dataType ] ) && ! empty( $wpacuGlobalDataArray[ $assetType ][ $dataType ] ) && array_key_exists($assetHandle,  $wpacuGlobalDataArray[ $assetType ][ $dataType ]) ) {
+			if ( ! empty( $wpacuGlobalDataArray[ $assetType ][ $dataType ] ) && array_key_exists($assetHandle,  $wpacuGlobalDataArray[ $assetType ][ $dataType ]) ) {
 				unset( $wpacuGlobalDataArray[ $assetType ][ $dataType ][ $assetHandle ]);
 			}
 		}
