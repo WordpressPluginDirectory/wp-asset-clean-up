@@ -3,7 +3,7 @@
  * The file is included from /templates/meta-box-loaded-assets/_asset-single-row.php
 */
 
-use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCss;
 use WpAssetCleanUp\OptimiseAssets\OptimizeJs;
 

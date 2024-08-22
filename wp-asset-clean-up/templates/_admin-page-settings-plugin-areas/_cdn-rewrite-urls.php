@@ -4,14 +4,14 @@
  */
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
-if (! isset($data, $selectedTabArea)) {
+if (! isset($data)) {
     exit;
 }
 
 global $wp_version;
 
 $tabIdArea = 'wpacu-setting-cdn-rewrite-urls';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
 
 $wpacuCloudFlareIconUrl = WPACU_PLUGIN_URL . '/assets/icons/icon-cloudflare.svg';
 ?>

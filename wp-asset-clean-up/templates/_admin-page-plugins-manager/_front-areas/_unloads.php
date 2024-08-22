@@ -1,6 +1,6 @@
 <?php
 // This file is included from /templates/_admin-page-plugins-manager/_front.php
-use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
 
 if (! isset($data)) {
 	exit;

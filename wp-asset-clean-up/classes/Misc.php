@@ -3,6 +3,7 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 /**
@@ -1289,7 +1290,7 @@ HTML;
 		return $array;
 	}
 
-	/**
+    /**
 	 * @param $name
 	 * @param $action
 	 *

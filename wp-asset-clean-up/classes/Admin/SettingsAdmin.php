@@ -1,11 +1,16 @@
 <?php
 /** @noinspection MultipleReturnStatementsInspection */
 
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
 
+use WpAssetCleanUp\Main;
+use WpAssetCleanUp\Menu;
+use WpAssetCleanUp\Misc;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCss;
 use WpAssetCleanUp\OptimiseAssets\OptimizeJs;
+use WpAssetCleanUp\Settings;
+use WpAssetCleanUp\Update;
 
 /**
  * Class SettingsAdmin
@@ -26,7 +31,7 @@ class SettingsAdmin
 
             if (function_exists('curl_init')) {
                 // Check if the website supports HTTP/2 protocol and based on that advise the admin that combining CSS/JS is likely unnecessary
-                add_action( 'admin_footer', array($this, 'adminFooterSettings') );
+                add_action( 'admin_footer', array($this, 'adminFooterVerifyHttp2Protocol') );
             }
         }
 
@@ -36,7 +41,7 @@ class SettingsAdmin
         add_action( 'wp_ajax_' . WPACU_PLUGIN_ID . '_update_settings', array($this, 'ajaxUpdateSpecificSettings') );
         add_action( 'wp_ajax_nopriv_' . WPACU_PLUGIN_ID . '_update_settings', array($this, 'ajaxUpdateSpecificSettings') );
 
-        // "Settings" -- "Plugin Usage Preferences" -- "Prevent features of Asset CleanUp Pro from triggering on specific pages" -- "Add New Rule"
+        // "Settings" -- "Plugin Usage Preferences" -- "Prevent features of Asset CleanUp Pro from triggering on certain pages" -- "Add New Rule"
         add_action( 'wp_ajax_' . WPACU_PLUGIN_ID . '_add_new_no_features_load_row', array($this, 'ajaxAddNewNoFeaturesLoadRow') );
     }
 
@@ -92,7 +97,7 @@ class SettingsAdmin
         $settingsClass = new Settings();
         $settings = $settingsClass->getAll();
 
-        return ($settings['frontend_show'] == 1);
+        return $settings['frontend_show'] == 1;
     }
 
     /**
@@ -217,7 +222,11 @@ class SettingsAdmin
                 $settings = $settingsAdminClass::toggleAppendInlineAssocCodeHiddenSettings($settings);
             }
 
-            // Pro: v1.2.4.2
+            // [Only for admins]
+            SettingsAdminOnlyForAdmin::filterSettingsOnFormSubmit();
+            // [/Only for admins]
+
+            // Pro: v1.2.4.2 | Lite: v1.3.9.4
             if ( ! empty($settings['do_not_load_plugin_features']) ) {
                 $settings['do_not_load_plugin_features'] = Misc::filterList($settings['do_not_load_plugin_features']);
                 if ( ! empty($settings['do_not_load_plugin_features']) ) {
@@ -336,7 +345,7 @@ class SettingsAdmin
      */
     public function ajaxDoVerifications()
     {
-        if ( ! isset($_POST['action']) || ! Menu::userCanManageAssets() ) {
+        if ( ! isset($_POST['action']) || ! Menu::userCanAccessAssetCleanUp() ) {
             return;
         }
 
@@ -397,7 +406,7 @@ class SettingsAdmin
     {
         // Option: "On Assets List Layout Load, keep the groups:"
         if (isset($_POST['wpacu_update_keep_the_groups'])) {
-            if ( ! isset( $_POST['action'], $_POST['wpacu_keep_the_groups_state'] ) || ! Menu::userCanManageAssets() ) {
+            if ( ! isset( $_POST['action'], $_POST['wpacu_keep_the_groups_state'] ) || ! Menu::userCanAccessAssetCleanUp() ) {
                 return;
             }
 
@@ -430,9 +439,8 @@ class SettingsAdmin
      */
     public function ajaxAddNewNoFeaturesLoadRow()
     {
-        if ( ! isset( $_REQUEST['action'] ) ||
-             ($_REQUEST['action'] !== WPACU_PLUGIN_ID . '_add_new_no_features_load_row') ||
-             ! Menu::userCanManageAssets() ) {
+        if ( ! isset( $_POST['action'] ) || ($_POST['action'] !== WPACU_PLUGIN_ID . '_add_new_no_features_load_row') ||
+             ! Menu::userCanAccessAssetCleanUp() ) {
             exit();
         }
 
@@ -446,7 +454,7 @@ class SettingsAdmin
     /**
      *
      */
-    public function adminFooterSettings()
+    public function adminFooterVerifyHttp2Protocol()
     {
         if ( ! (defined('CURLOPT_HTTP_VERSION') && defined('CURL_HTTP_VERSION_2_0')) ) {
             ?>
@@ -462,8 +470,8 @@ class SettingsAdmin
         <script type="text/javascript">
             jQuery(document).ready(function($) {
                 $.post('<?php echo esc_url(admin_url('admin-ajax.php')); ?>', {
-                    'action': '<?php echo WPACU_PLUGIN_ID; ?>_do_verifications',
-                    'wpacu_nonce': '<?php echo wp_create_nonce('wpacu_do_verifications'); ?>'
+                    action: '<?php echo WPACU_PLUGIN_ID; ?>_do_verifications',
+                    wpacu_nonce: '<?php echo wp_create_nonce('wpacu_do_verifications'); ?>'
                 }, function (obj) {
                     let result = jQuery.parseJSON(obj);
                     console.log(result);

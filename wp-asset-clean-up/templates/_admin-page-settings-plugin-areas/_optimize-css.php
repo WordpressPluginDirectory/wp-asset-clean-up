@@ -6,14 +6,14 @@ use WpAssetCleanUp\Misc;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCss;
 
-if (! isset($data, $selectedTabArea)) {
+if (! isset($data)) {
     exit;
 }
 
 global $wp_version;
 
 $tabIdArea = 'wpacu-setting-optimize-css';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
 ?>
 <div id="<?php echo esc_attr($tabIdArea); ?>" class="wpacu-settings-tab-content" <?php echo wp_kses($styleTabContent, array('style' => array())); ?>>
     <h2 class="wpacu-settings-area-title"><?php _e('Minify / Combine loaded CSS files to reduce total page size and the number of HTTP requests', 'wp-asset-clean-up'); ?></h2>

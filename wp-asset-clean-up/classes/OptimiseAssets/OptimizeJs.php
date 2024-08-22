@@ -1374,7 +1374,7 @@ class OptimizeJs
 
         $pluginSettings = Main::instance()->settings;
 
-        if ($pluginSettings['test_mode'] && ! Menu::userCanManageAssets()) {
+        if ($pluginSettings['test_mode'] && ! Menu::userCanAccessAssetCleanUp()) {
             return false; // Do not combine anything if "Test Mode" is ON
         }
 
@@ -1395,7 +1395,7 @@ class OptimizeJs
         /*
         if ( ($pluginSettings['combine_loaded_js'] === 'for_admin'
               || $pluginSettings['combine_loaded_js_for_admin_only'] == 1)
-             && Menu::userCanManageAssets() ) {
+             && Menu::userCanAccessAssetCleanUp() ) {
             return true; // Do combine
         }
         */

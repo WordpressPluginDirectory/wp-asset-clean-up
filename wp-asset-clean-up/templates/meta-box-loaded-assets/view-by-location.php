@@ -1,8 +1,8 @@
 <?php
 // no direct access
-use WpAssetCleanUp\Info;
+use WpAssetCleanUp\Admin\Info;
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\Misc;
-use WpAssetCleanUp\MiscAdmin;
 
 if (! isset($data)) {
 	exit;

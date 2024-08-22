@@ -1,9 +1,20 @@
 <?php
 /** @noinspection MultipleReturnStatementsInspection */
 
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
 
+use WpAssetCleanUp\AssetsManager;
+use WpAssetCleanUp\HardcodedAssets;
+use WpAssetCleanUp\Main;
+use WpAssetCleanUp\MainFront;
+use WpAssetCleanUp\Menu;
+use WpAssetCleanUp\MetaBoxes;
+use WpAssetCleanUp\Misc;
+use WpAssetCleanUp\ObjectCache;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
+use WpAssetCleanUp\Preloads;
+use WpAssetCleanUp\Settings;
+use WpAssetCleanUp\Update;
 
 /**
  * Class MainAdmin
@@ -173,7 +184,7 @@ class MainAdmin
 			return;
 		}
 
-		if (! isset($_POST['action']) || ! Menu::userCanManageAssets()) {
+		if (! isset($_POST['action']) || ! Menu::userCanAccessAssetCleanUp()) {
 			return;
 		}
 
@@ -203,7 +214,7 @@ class MainAdmin
 	 */
 	public function ajaxFetchActivePluginsJsFooterCode()
 	{
-		if (! Menu::isPluginPage() || ! Menu::userCanManageAssets()) {
+		if (! Menu::isPluginPage() || ! Menu::userCanAccessAssetCleanUp()) {
 			return;
 		}
 
@@ -315,7 +326,7 @@ class MainAdmin
     {
         // The logged-in admin needs to be outside the Dashboard (in the front-end view)
         // "Manage in the Front-end" is enabled in "Settings" -> "Plugin Usage Preferences"
-        return ! is_admin() && ! Main::instance()->isGetAssetsCall && is_super_admin() && Menu::userCanManageAssets('skip_is_super_admin') && AssetsManager::instance()->frontendShow();
+        return ! is_admin() && ! Main::instance()->isGetAssetsCall && Menu::userCanAccessAssetCleanUp() && AssetsManager::instance()->frontendShow();
     }
 
     /**
@@ -1067,7 +1078,7 @@ class MainAdmin
 			if ( ! ($wpacuListE || $wpacuListH) ) {
 				// 'body' is set, and it's not an array
 				if ( is_wp_error($wpRemotePost) ) {
-					$wpRemotePost['response']['message'] = $wpRemotePost->get_error_message();
+                    $wpRemotePost['response']['message'] = $wpRemotePost->get_error_message();
 				} elseif ( isset( $wpRemotePost['body']) ) {
 					if ( trim( $wpRemotePost['body'] ) === '' ) {
 						$wpRemotePost['body'] = '<strong>Error (blank page):</strong> It looks the targeted page is loading, but it has no content. The page seems to be blank. Please load it in incognito mode (when you are not logged-in) via your browser.';
@@ -1256,7 +1267,7 @@ class MainAdmin
 				return;
 			}
 
-			if ( ! (Menu::userCanManageAssets() && ! is_admin()) ) {
+			if ( ! (Menu::userCanAccessAssetCleanUp() && ! is_admin()) ) {
 				return;
 			}
 
@@ -1289,7 +1300,7 @@ class MainAdmin
      */
     public function parseTemplate($name, $data = array(), $echo = false, $returnData = false)
     {
-        $pathToTemplateFile = dirname(__DIR__) . '/templates/' . $name . '.php';
+        $pathToTemplateFile = WPACU_PLUGIN_DIR . '/templates/' . $name . '.php';
 
         $templateFile = apply_filters(
             'wpacu_template_file', // tag
@@ -1297,8 +1308,11 @@ class MainAdmin
             $name // extra argument
         );
 
-        if (! is_file($templateFile)) {
-            return 'Template '.$templateFile.' not found.';
+        if ( ! is_file($templateFile) ) {
+            throw new \Exception(
+            __('The following template file was not found:', 'wp-asset-clean-up') .
+            ' <strong>'.$templateFile.'</strong>'
+            );
         }
 
         ob_start();

@@ -2,7 +2,7 @@
 /*
  * Plugin Name: Asset CleanUp: Page Speed Booster
  * Plugin URI: https://wordpress.org/plugins/wp-asset-clean-up/
- * Version: 1.3.9.4
+ * Version: 1.3.9.6
  * Requires at least: 4.5
  * Requires PHP: 5.6
  * Description: Unload Chosen Scripts & Styles from Posts/Pages to reduce HTTP Requests, Combine/Minify CSS/JS files
@@ -29,7 +29,7 @@ if ( (defined('WPACU_PRO_NO_LITE_NEEDED') && WPACU_PRO_NO_LITE_NEEDED !== false 
 
 // Is the Pro version triggered before the Lite one and are both plugins active?
 if (! defined('WPACU_PLUGIN_VERSION')) {
-	define('WPACU_PLUGIN_VERSION', '1.3.9.4');
+	define('WPACU_PLUGIN_VERSION', '1.3.9.6');
 }
 
 // Exit if accessed directly
@@ -158,9 +158,37 @@ if ( isset($_SERVER['REQUEST_URI']) && ! is_admin() ) {
     });
 }
 
+// Make sure the plugin doesn't load when the editor of either "X" theme or "Pro" website creator (theme.co) is ON
+add_action('init', static function() {
+    if (is_admin()) {
+        return; // Not relevant for the Dashboard view, stop here!
+    }
+
+    if ( ! \WpAssetCleanUp\Menu::userCanAccessAssetCleanUp() ) {
+        return; // Not relevant if the logged-in user does not have full rights
+    }
+
+    if (method_exists('Cornerstone_Common', 'get_app_slug') && in_array(get_stylesheet(), array('x', 'pro'))) {
+        $customAppSlug = get_stylesheet(); // default one ('x' or 'pro')
+
+        // Is there any custom slug set in "/wp-admin/admin.php?page=cornerstone-settings"?
+        // "Settings" -> "Custom Path" (check it out below)
+        $cornerStoneSettings = get_option('cornerstone_settings');
+        if (isset($cornerStoneSettings['custom_app_slug']) && $cornerStoneSettings['custom_app_slug'] !== '') {
+            $customAppSlug = $cornerStoneSettings['custom_app_slug'];
+        }
+
+        $lengthToUse = strlen($customAppSlug) + 2; // add the slashes to the count
+
+        if (substr($_SERVER['REQUEST_URI'], -$lengthToUse) === '/'.$customAppSlug.'/') {
+            add_filter( 'wpacu_prevent_any_frontend_optimization', '__return_true' );
+        }
+    }
+}, PHP_INT_MAX);
+
 // "Transliterator - WordPress Transliteration" breaks the HTML content in Asset CleanUp's admin pages
 // by converting characters such as &lt; (that should stay as they are) to < thus, a fix is attempted to be made here
 if (isset($_GET['page']) && is_string($_GET['page']) && (strpos($_GET['page'], WPACU_PLUGIN_ID.'_') !== false) && is_admin() && method_exists('Serbian_Transliteration_Cache', 'set')) {
-	Serbian_Transliteration_Cache::set('is_editor', true);
+    Serbian_Transliteration_Cache::set('is_editor', true);
 }
 

@@ -3,7 +3,7 @@
  * No direct access to this file
  */
 
-use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
 
 if (! isset($data)) {
 	exit;

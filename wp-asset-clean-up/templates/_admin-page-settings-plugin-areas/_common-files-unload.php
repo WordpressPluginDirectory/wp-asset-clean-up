@@ -5,12 +5,12 @@
 
 use WpAssetCleanUp\Tips;
 
-if (! isset($data, $selectedTabArea)) {
+if (! isset($data)) {
 	exit;
 }
 
 $tabIdArea = 'wpacu-setting-common-files-unload';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
 ?>
 <div id="<?php echo esc_attr($tabIdArea); ?>" class="wpacu-settings-tab-content" <?php echo wp_kses($styleTabContent, array('style' => array())); ?>>
     <h2 class="wpacu-settings-area-title"><?php _e('Site-Wide Unload For Common CSS &amp; JS Files', 'wp-asset-clean-up'); ?></h2>

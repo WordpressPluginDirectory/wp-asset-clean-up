@@ -1,5 +1,4 @@
 <?php
-
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 if (! isset($data)) {

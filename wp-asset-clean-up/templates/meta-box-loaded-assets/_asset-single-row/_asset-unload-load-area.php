@@ -18,7 +18,7 @@ if ( ! isset($data, $assetTypeS) ) {
     }
 
     // Unload on all pages where this [post] post type has a certain taxonomy set for it (e.g. a Tag or a Category) (if applicable)
-    // There has to be at least a taxonomy created for this [post] post type in order to show this option
+    // There has to be at least a taxonomy created for this [post] post type to show this option
     if (isset($data['post_type']) && $data['post_type'] !== 'attachment' && ! $data['row']['is_post_type_unloaded'] && ! empty($data['post_type_has_tax_assoc'])) {
         include __DIR__ . '/_asset-single-row-unload-post-type-taxonomy.php';
     }

@@ -3,8 +3,8 @@
  * The file is included from _asset-single-row-hardcoded-prepare-data.php, and it's relevant only for the hardcoded assets (non-enqueued)
 */
 
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\HardcodedAssets;
-use WpAssetCleanUp\MiscAdmin;
 
 if ( ! isset($data) ) {
     exit(); // no direct access
@@ -161,7 +161,7 @@ if (isset($data['handle_rows_contracted'][$assetType][$data['row']['obj']->handl
                 }
 
                 // Unload on all pages where this [post] post type has a certain taxonomy set for it (e.g. a Tag or a Category) (if applicable)
-                // There has to be at least a taxonomy created for this [post] post type in order to show this option
+                // There has to be at least a taxonomy created for this [post] post type to show this option
                 if (isset($data['post_type']) && $data['post_type'] !== 'attachment'
                     && ! empty($data['post_type_has_tax_assoc'])) {
                     // Unload on all pages where this [post] post type has a certain taxonomy set for it (e.g. a Tag or a Category) (if applicable)

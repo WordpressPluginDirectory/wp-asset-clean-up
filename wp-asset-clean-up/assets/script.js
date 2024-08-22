@@ -179,9 +179,7 @@
                             $('.input-unload-on-this-page[data-handle-for="' + handleFor + '"][data-handle="' + handle + '"]')
                                 .prop('checked', false);
                         }
-                        //wpAssetCleanUp.uncheckAllOtherBulkUnloadRules($(this));
-                        //$(this).closest('tr').find('.wpacu_remove_site_wide_rule').prop('checked', true);
-                    } else {
+                        } else {
                         /***********************************************************************************
                          * STATE 2: The checkbox IS UNCHECKED / UNMARKED (the multiple drop-down is hidden)
                          ***********************************************************************************
@@ -214,12 +212,6 @@
                              * "Unload via taxonomy" (post type) is clicked
                              */
                             $parentLi.find('label').removeClass('wpacu_unload_checked');
-                            /*
-                            $parentLi.find('select')
-                                .blur() // lose focus
-                                .addClass('wpacu_disabled');
-                            */
-                            //$parentLi.find('select').prop('disabled', true).val(''); // unchecked with no value added to the input
                             $parentLi.find('.wpacu_handle_manage_post_type_via_tax_input_wrap').addClass('wpacu_hide'); // Hide the input area
                         }
 
@@ -1078,11 +1070,9 @@ jQuery(document).ready(function($) {
                 $(document).on('click', '#wpacu_dashboard', function() {
                     if ($(this).prop('checked')) {
                         $('#wpacu-settings-assets-retrieval-mode').show();
-                        //$('#wpacu_hide_meta_boxes_for_post_types_chosen .chosen-choices, #wpacu-hide-meta-boxes-for-post-types-info').css({'opacity':1});
-                    } else {
+                        } else {
                         $('#wpacu-settings-assets-retrieval-mode').hide();
-                        //$('#wpacu_hide_meta_boxes_for_post_types_chosen .chosen-choices, #wpacu-hide-meta-boxes-for-post-types-info').css({'opacity':0.4});
-                    }
+                        }
                 });
 
                 // "Manage in the Dashboard?" radio selection
@@ -1252,6 +1242,107 @@ jQuery(document).ready(function($) {
                     $('#wpacu-updating-settings').show();
                     return true;
                 });
+
+                // [START] Auto-complete user search drop-down (for plugin access)
+                // Auto-complete search is enabled in "Settings" -- "Plugin Usage Preferences" -- "Plugin Access" -- "Give access for specific non-administrator users"
+                // The regular drop-dowmn was not used, as there are lots of WordPress users added in the database
+                var nonAdminUsersDdSearchTarget = '#wpacu-access-via-specific-users-dd-search';
+
+                if ($(nonAdminUsersDdSearchTarget).length > 0) {
+                    // Add non-admin user to the list
+                    $(document).on('change', nonAdminUsersDdSearchTarget, function () {
+                        var chosenUserId = $(nonAdminUsersDdSearchTarget).chosen().val();
+
+                        if ($('[data-wpacu-non-admin-chosen-user-id="' + chosenUserId + '"]').length < 1) {
+                            $('#wpacu-access-via-specific-user-adding-notice').removeClass('wpacu_hide');
+
+                            $(nonAdminUsersDdSearchTarget).prop('disabled', true);
+
+                            $(nonAdminUsersDdSearchTarget).empty();
+                            $(nonAdminUsersDdSearchTarget).append('<option value=""></option>');
+                            $(nonAdminUsersDdSearchTarget).trigger('liszt:updated').trigger('chosen:updated');
+
+                            // Append it
+                            $.ajax({
+                                method: 'post',
+                                url: wpacu_object.ajax_url,
+                                data: {
+                                    action: wpacu_object.plugin_prefix + '_add_non_admin_users_to_chosen_list',
+                                    wpacu_user_id: chosenUserId,
+                                    wpacu_time_r: new Date().getTime()
+                                },
+                                cache: false,
+                                success: function (response) {
+                                    $('[data-wpacu-non-admin-chosen-users-list]')
+                                        .append(response)
+                                        .children(':last')
+                                        .hide()
+                                        .fadeIn(300, function () {
+                                            $('#wpacu-access-via-specific-user-adding-notice').addClass('wpacu_hide');
+                                            $(nonAdminUsersDdSearchTarget).prop('disabled', false);
+                                            $(nonAdminUsersDdSearchTarget).trigger('liszt:updated').trigger('chosen:updated');
+                                        });
+                                }
+                            });
+                        } else {
+                            alert('You have already chosen this non-admin user to get plugin access.');
+
+                            $(nonAdminUsersDdSearchTarget).empty();
+                            $(nonAdminUsersDdSearchTarget).append('<option value=""></option>');
+                            $(nonAdminUsersDdSearchTarget).trigger('liszt:updated').trigger('chosen:updated');
+
+                            return false;
+                        }
+                    });
+
+                    // Remove non-admin user from the list
+                    $(document).on('click', '[data-clear-wpacu-non-admin-chosen-user-id]', function (e) {
+                        e.preventDefault();
+
+                        var chosenUserId = $(this).attr('data-clear-wpacu-non-admin-chosen-user-id');
+
+                        $('[data-wpacu-non-admin-chosen-user-id="' + chosenUserId + '"]').fadeOut(300, function () {
+                            $(this).remove();
+                        });
+                    });
+
+                    var wpacuAccessViaSpecificUserSearchInput = '#wpacu-area-option-give-access-specific-non-admin-users .chosen-search .chosen-search-input';
+
+                    setTimeout(function() {
+                        $(wpacuAccessViaSpecificUserSearchInput).autocomplete({
+                            source: function (request, response) {
+                                $('#wpacu-access-via-specific-user-searching-notice').removeClass('wpacu_hide');
+
+                                $.ajax({
+                                    method: 'post',
+                                    url: wpacu_object.ajax_url,
+                                    data: {
+                                        action:         wpacu_object.plugin_prefix + '_search_non_admin_users_for_dd',
+                                        wpacu_query:    request.term,
+                                        wpacu_security: wpacu_object.wpacu_search_non_admin_users_for_dd_nonce,
+                                        wpacu_time_r:   new Date().getTime()
+                                    },
+                                    cache: false,
+                                    success: function (response) {
+                                        $(nonAdminUsersDdSearchTarget).empty();
+                                        $(nonAdminUsersDdSearchTarget).append('<option value=""></option>');
+
+                                        $(nonAdminUsersDdSearchTarget).append(response);
+
+                                        var chosenInputValue = $(wpacuAccessViaSpecificUserSearchInput).val();
+
+                                        $(nonAdminUsersDdSearchTarget).trigger('liszt:updated').trigger('chosen:updated');
+
+                                        $(wpacuAccessViaSpecificUserSearchInput).val(chosenInputValue);
+
+                                        $('#wpacu-access-via-specific-user-searching-notice').addClass('wpacu_hide');
+                                    }
+                                });
+                            }
+                        });
+                    }, 1000);
+                }
+                // [END] Auto-complete user search drop-down (for plugin access)
             },
 
             tabOpenSettingsArea: function(evt, settingName) {
@@ -1283,7 +1374,6 @@ jQuery(document).ready(function($) {
 
                 // Any sub-tabs within the tab area?
                 let $anyFirstSubTabInput = $('#' + settingName).find('.wpacu-sub-tabs-wrap .wpacu-nav-input:first-child');
-                //console.log($anyFirstSubTabInput.length);
 
                 if ($anyFirstSubTabInput.length > 0) {
                     $('#' + $anyFirstSubTabInput.attr('id')).prop('checked', true);
@@ -1491,8 +1581,6 @@ jQuery(document).ready(function($) {
                     });
                 }
 
-                //console.log('Reached zone...');
-
                 // Better compatibility with WordPress 5.0 as edit post/page is not refreshed after update
                 // Asset CleanUp meta box's content is refreshed to show the latest changes as if the page was refreshed
                 // This takes effect only when edit post/page is used and Gutenberg editor is used - e.g. /wp-admin/post.php?post=[post_id_here]&action=edit
@@ -1510,8 +1598,6 @@ jQuery(document).ready(function($) {
                         parentClassElementIdentifier = '.edit-post-header__settings';
                         isSavingIdentifier = '.is-saving';
                     }
-
-                    //console.log(parentClassElementIdentifier);
 
                     // Wait until triggering it around half a second after the "Update" button is clicked
                     setTimeout(function() {
@@ -1534,7 +1620,7 @@ jQuery(document).ready(function($) {
 
                                 if ($(wpacuMetaBoxContentTarget).length > 0) {
                                     if ($('#wpacu-assets-reloading-in-edit-post-area').length === 0) {
-                                        let wpacuAppendToPostWhileUpdating = '<span id="wpacu-assets-reloading-in-edit-post-area" class="editor-post-saved-state is-wpacu-reloading">' + wpacu_object.reload_icon + '&nbsp;' + wpacu_object.reload_msg + '</span>';
+                                        let wpacuAppendToPostWhileUpdating = '<span id="wpacu-assets-reloading-in-edit-post-area">' + wpacu_object.reload_icon + '&nbsp;<strong>' + wpacu_object.reload_msg + '</strong></span>';
                                         $('.wp-admin.post-php ' + parentClassElementIdentifier).prepend(wpacuAppendToPostWhileUpdating);
                                     }
 

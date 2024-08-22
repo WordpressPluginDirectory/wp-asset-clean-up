@@ -2032,13 +2032,6 @@ body:not(.wp-admin) .go-pro-link-no-style .wpacu-tooltip.wpacu-larger {
   line-height: 20px;
 }
 
-.wpacu-wrap {
-  /*
-    Show all settings on one page (no tabs)
-    e.g. 'wpacu_show_all' query string appended to the URL
-         /wp-admin/admin.php?page=wpassetcleanup_settings&wpacu_show_all
-  */
-}
 .wpacu-wrap.wpacu-area-disabled {
   opacity: 0.5;
 }
@@ -2052,43 +2045,6 @@ body:not(.wp-admin) .go-pro-link-no-style .wpacu-tooltip.wpacu-larger {
 }
 .wpacu-wrap small code {
   font-size: inherit !important;
-}
-.wpacu-wrap.wpacu-settings-show-all .wpacu-settings-tab-content {
-  display: block;
-  width: 100%;
-}
-.wpacu-wrap.wpacu-settings-show-all .wpacu-settings-area-title {
-  color: #004567;
-  padding: 16px 15px;
-  background: #f8f8f8;
-  border-left: 5px solid #004567b0;
-  border-top: 1px solid #e7e7e7;
-  border-right: 1px solid #e7e7e7;
-  border-bottom: 1px solid #e7e7e7;
-  -webkit-border-radius: 5px;
-  /* Chrome, Safari, Opera */
-  -moz-border-radius: 5px;
-  /* Firefox */
-  border-radius: 5px;
-  font-size: 1.45em;
-  font-weight: 500;
-}
-.wpacu-wrap.wpacu-settings-show-all #wpacu-update-button-area {
-  margin: 0;
-}
-.wpacu-wrap.wpacu-settings-show-all #wpacu-update-button-area .submit {
-  margin: 0;
-}
-.wpacu-wrap.wpacu-settings-show-all #wpacu-update-button-area .button {
-  padding-left: 18px;
-  padding-right: 18px;
-  height: 46px;
-  font-size: 18px;
-}
-.wpacu-wrap.wpacu-settings-show-all #wpacu-updating-settings {
-  margin-left: 224px;
-  top: 35px;
-  left: 3px;
 }
 
 .wpacu-switch-standard .asset-cleanup_page_wpassetcleanup_settings .wpacu_switch,
@@ -2747,6 +2703,31 @@ input#wpacu_hide_from_admin_bar:checked:before, input#wpacu_hide_from_side_bar:c
   margin: -0.1875rem 0 0 -0.25rem;
   height: 1.3125rem;
   width: 1.3125rem;
+}
+
+.wpacu_non_admin_chosen_user_id_area {
+  display: inline-block;
+  padding: 8px;
+  border-left: 2px solid green;
+  border-top: 1px solid #f2faf2;
+  border-right: 1px solid #f2faf2;
+  border-bottom: 1px solid #f2faf2;
+  background: #f2faf2;
+  margin: 0 15px 20px 0;
+  -webkit-border-radius: 5px;
+  /* Chrome, Safari, Opera */
+  -moz-border-radius: 5px;
+  /* Firefox */
+  border-radius: 5px;
+}
+.wpacu_non_admin_chosen_user_id_area:hover {
+  border-top: 1px solid green;
+  border-right: 1px solid green;
+  border-bottom: 1px solid green;
+}
+.wpacu_non_admin_chosen_user_id_area .wpacu_remove_non_admin_access {
+  color: darkred;
+  text-decoration: none;
 }
 
 /*

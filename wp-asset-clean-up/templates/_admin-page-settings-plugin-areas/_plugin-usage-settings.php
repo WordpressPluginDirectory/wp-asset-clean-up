@@ -2,7 +2,7 @@
 /*
  * No direct access to this file
  */
-if (! isset($data, $selectedTabArea, $selectedSubTabArea)) {
+if (! isset($data)) {
 	exit;
 }
 
@@ -12,7 +12,11 @@ use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 use WpAssetCleanUp\PluginTracking;
 
 $tabIdArea = 'wpacu-setting-plugin-usage-settings';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+
+if ( ! isset($selectedSubTabArea) ) {
+    $selectedSubTabArea = 'wpacu-plugin-usage-settings-assets-management';
+}
 
 $postTypesList = get_post_types(array('public' => true));
 
@@ -42,7 +46,7 @@ foreach (MetaBoxes::$noMetaBoxesForPostTypes as $noMetaBoxesForPostType) {
                value="wpacu-plugin-usage-settings-cache"
                <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-cache') { ?>checked="checked"<?php } ?> />
         <label class="wpacu-nav-label"
-               for="wpacu-plugin-usage-settings-cache-tab-item">CSS/JS Caching</label>
+               for="wpacu-plugin-usage-settings-cache-tab-item">CSS/JS Cache</label>
 
         <input class="wpacu-nav-input"
                id="wpacu-plugin-usage-settings-accessibility-tab-item"
@@ -78,18 +82,32 @@ foreach (MetaBoxes::$noMetaBoxesForPostTypes as $noMetaBoxesForPostType) {
                value="wpacu-plugin-usage-settings-no-load-on-specific-pages"
                <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-no-load-on-specific-pages') { ?>checked="checked"<?php } ?> />
         <label class="wpacu-nav-label"
-               for="wpacu-plugin-usage-settings-no-load-on-specific-pages-tab-item">Do not load on specific pages</label>
+               for="wpacu-plugin-usage-settings-no-load-on-specific-pages-tab-item">No load on certain frontend pages</label>
+
+        <?php if (current_user_can(\WpAssetCleanUp\Menu::$defaultAccessRole)) { ?>
+        <input class="wpacu-nav-input"
+               id="wpacu-plugin-usage-settings-access-tab-item"
+               type="radio"
+               name="wpacu_sub_tab_area"
+               value="wpacu-plugin-usage-settings-access"
+               <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-access') { ?>checked="checked"<?php } ?> />
+        <label class="wpacu-nav-label"
+               for="wpacu-plugin-usage-settings-access-tab-item">Plugin Access</label>
+        <?php } ?>
         <!-- /Sub-nav menu -->
 
         <section class="wpacu-sub-tabs-item <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-assets-management') { echo 'wpacu-visible'; } ?>" id="wpacu-plugin-usage-settings-assets-management-tab-item-area">
             <?php include_once __DIR__.'/_plugin-usage-settings/_assets-management.php'; ?>
         </section>
+
         <section class="wpacu-sub-tabs-item <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-cache') { echo 'wpacu-visible'; } ?>" id="wpacu-plugin-usage-settings-cache-tab-item-area">
             <?php include_once __DIR__.'/_plugin-usage-settings/_cache.php'; ?>
         </section>
+
         <section class="wpacu-sub-tabs-item <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-accessibility') { echo 'wpacu-visible'; } ?>" id="wpacu-plugin-usage-settings-accessibility-tab-item-area">
             <?php include_once __DIR__.'/_plugin-usage-settings/_accessibility.php'; ?>
         </section>
+
         <section class="wpacu-sub-tabs-item <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-visibility') { echo 'wpacu-visible'; } ?>" id="wpacu-plugin-usage-settings-visibility-tab-item-area">
             <?php include_once __DIR__.'/_plugin-usage-settings/_visibility.php'; ?>
         </section>
@@ -101,6 +119,12 @@ foreach (MetaBoxes::$noMetaBoxesForPostTypes as $noMetaBoxesForPostType) {
         <section class="wpacu-sub-tabs-item <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-no-load-on-specific-pages') { echo 'wpacu-visible'; } ?>" id="wpacu-plugin-usage-settings-no-load-on-specific-pages-tab-item-area">
             <?php include_once __DIR__.'/_plugin-usage-settings/_no-load-on-specific-pages.php'; ?>
         </section>
+
+        <?php if (current_user_can(\WpAssetCleanUp\Menu::$defaultAccessRole)) { ?>
+        <section class="wpacu-sub-tabs-item <?php if ($selectedSubTabArea === 'wpacu-plugin-usage-settings-access') { echo 'wpacu-visible'; } ?>" id="wpacu-plugin-usage-settings-access-tab-item-area">
+            <?php include_once __DIR__.'/_plugin-usage-settings/_access.php'; ?>
+        </section>
+        <?php } ?>
     </div> <!-- /Sub-tabs wrap -->
 </div>
 

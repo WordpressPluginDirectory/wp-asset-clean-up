@@ -1,8 +1,13 @@
 <?php
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
+
+use WpAssetCleanUp\Menu;
+use WpAssetCleanUp\Misc;
+use WpAssetCleanUp\Settings;
+use WpAssetCleanUp\Update;
 
 /**
- * Class AssetsPagesManager
+ * Class AssetsManagerAdmin
  * @package WpAssetCleanUp
  *
  * Actions taken within the Dashboard, inside the plugin area: "CSS & JS MANAGER" (main top menu) -- "MANAGE CSS/JS" (main tab)
@@ -15,7 +20,7 @@ class AssetsManagerAdmin
     public $data = array();
 
 	/**
-	 * AssetsPagesManager constructor.
+	 * AssetsManagerAdmin constructor.
 	 */
 	public function __construct()
     {

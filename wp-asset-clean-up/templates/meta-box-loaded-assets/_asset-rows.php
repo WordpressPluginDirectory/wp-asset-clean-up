@@ -1,8 +1,7 @@
 <?php
 /** @noinspection OffsetOperationsInspection */
 
-use WpAssetCleanUp\MainAdmin;
-use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\Admin\MainAdmin;
 
 if ( ! isset($data) ) {
     exit(); // no direct access

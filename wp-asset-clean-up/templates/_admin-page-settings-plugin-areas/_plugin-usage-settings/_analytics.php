@@ -16,7 +16,7 @@ if (! isset($data)) {
                        name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[allow_usage_tracking]"
                        value="1" /> <span class="wpacu_slider wpacu_round"></span> </label>
             &nbsp;
-            Allow <?php echo WPACU_PLUGIN_TITLE; ?> to anonymously track plugin usage in order to help us make the plugin better? No sensitive or personal data is collected. <span style="color: #004567;" class="dashicons dashicons-info"></span> <a data-wpacu-modal-target="wpacu-show-tracked-data-list-modal-target" href="#wpacu-show-tracked-data-list-modal">What kind of data will be sent for the tracking?</a>
+            Allow <?php echo WPACU_PLUGIN_TITLE; ?> to anonymously track plugin usage to help us make the plugin better? No sensitive or personal data is collected. <span style="color: #004567;" class="dashicons dashicons-info"></span> <a data-wpacu-modal-target="wpacu-show-tracked-data-list-modal-target" href="#wpacu-show-tracked-data-list-modal">What kind of data will be sent for the tracking?</a>
         </td>
     </tr>
 </table>

@@ -3,6 +3,9 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\AssetsManagerAdmin;
+use WpAssetCleanUp\Admin\SettingsAdminOnlyForAdmin;
+
 /**
  * Class OwnAssets
  *
@@ -81,7 +84,7 @@ class OwnAssets
 
             'autocomplete_search' => array(
                 'handle'   => WPACU_PLUGIN_ID . '-autocomplete-search',
-                'rel_path' => '/assets/auto-complete/main.min.js'
+                'rel_path' => '/assets/auto-complete/assets-manager-search-pages.min.js'
             )
         );
 
@@ -100,7 +103,7 @@ class OwnAssets
 		    self::$ownAssets['styles']
              ['autocomplete_search_jquery_ui_custom']['rel_path']  = '/assets/auto-complete/smoothness/jquery-ui-custom.css';
 		    self::$ownAssets['scripts']
-             ['autocomplete_search']['rel_path']                   = '/assets/auto-complete/main.js';
+             ['autocomplete_search']['rel_path']                   = '/assets/auto-complete/assets-manager-search-pages.js';
 	    }
     }
 
@@ -123,10 +126,68 @@ class OwnAssets
         $chosenScriptInline = <<<JS
 jQuery(document).ready(function($) {
     $('.wpacu_chosen_select').each(function() {
-        /*
-        * Default
-         */
-        $('.wpacu_chosen_select').chosen();
+        if ($(this).hasClass('wpacu_access_via_specific_users_dd_search')) {
+            /*
+            * [Access via specific users search DD]
+            */
+            $('.wpacu_chosen_select.wpacu_access_via_specific_users_dd_search').chosen({
+                'width'                                       : '100%',
+                'no_results_text'                             : '&nbsp;',
+                'reset_search_field_on_update'                : false,
+                'reset_multiple_search_field_on_focus_change' : false
+            });
+            /*
+            * [/Access via specific users search DD]
+            */
+        } else if ($(this).hasClass('wpacu_access_via_specific_users_dd')) {
+            /*
+            * [Access via specific users DD]
+            */
+            $('.wpacu_chosen_select.wpacu_access_via_specific_users_dd').chosen({
+                'width' : '100%',
+            });
+            /*
+            * [/Access via specific users DD]
+            */
+        }
+        /* [wpacu_pro] */
+        else if ($(this).hasClass('wpacu_plugin_manage_via_post_type_dd')) {
+            /*
+            * [Post Types DD]
+            */
+            $('.wpacu_chosen_select.wpacu_plugin_manage_via_post_type_dd').chosen({'width':'100%'});
+            /*
+            * [/Post Types DD]
+            */
+        } else if ($(this).hasClass('wpacu_plugin_manage_via_archive_dd')) {
+            /*
+            * [Archive Types DD]
+            */
+            $('.wpacu_chosen_select.wpacu_plugin_manage_via_archive_dd').chosen({'width':'100%'});
+            /*
+            * [/Archive Types DD]
+            */
+        } else if ($(this).hasClass('wpacu_plugin_manage_logged_in_via_role_dd')) {
+            /*
+            * [User Roles DD]
+            */
+            $('.wpacu_chosen_select.wpacu_plugin_manage_logged_in_via_role_dd').chosen({'width':'100%'});
+            /*
+            * [/User Roles DD]
+            */
+        } else if ($(this).hasClass('wpacu-input-element')) {
+            $('select.wpacu-input-element.wpacu_chosen_select').chosen();
+        } else {
+        /* [/wpacu_pro] */
+            
+            /*
+            * Default (only having the class "wpacu_chosen_select")
+             */
+            $('select[class="wpacu_chosen_select"]').chosen();
+            
+        /* [wpacu_pro] */
+        }
+        /* [/wpacu_pro] */
     });
 });
 JS;
@@ -139,7 +200,7 @@ JS;
      */
 	public static function getOwnAssetsHandles($assetType = '')
     {
-        if ( ! current_user_can( 'administrator' ) ) {
+        if ( ! Menu::userCanAccessAssetCleanUp() ) {
             return array();
         }
 
@@ -322,7 +383,7 @@ JS;
      */
     public function stylesAndScriptsForAdmin()
     {
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			return;
 		}
 
@@ -341,7 +402,7 @@ JS;
 		}
 
 		// Only for the administrator with the right permission
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			return;
 		}
 
@@ -395,7 +456,7 @@ JS;
         wp_register_script(
 	        self::$ownAssets['scripts']['script_core']['handle'],
             plugins_url(self::$ownAssets['scripts']['script_core']['rel_path'], WPACU_PLUGIN_FILE),
-            array('jquery'),
+            array('jquery', 'jquery-ui-autocomplete'),
             self::assetVer(self::$ownAssets['scripts']['script_core']['rel_path'])
         );
 
@@ -1213,6 +1274,10 @@ HTML;
         $wpacuObjectData['wpacu_ajax_load_page_restricted_area_nonce'] = wp_create_nonce('wpacu_ajax_load_page_restricted_area_nonce');
         $wpacuObjectData['wpacu_ajax_clear_cache_nonce']               = wp_create_nonce('wpacu_ajax_clear_cache_nonce');
         $wpacuObjectData['wpacu_ajax_preload_url_nonce']               = wp_create_nonce('wpacu_ajax_preload_url_nonce'); // After the CSS/JS manager's form is submitted (e.g. on an edit post/page)
+
+        if (SettingsAdminOnlyForAdmin::useAutoCompleteSearchForNonAdminUsersDd()) {
+            $wpacuObjectData['wpacu_search_non_admin_users_for_dd_nonce'] = wp_create_nonce('wpacu_search_non_admin_users_for_dd_nonce');
+        }
 
         return $wpacuObjectData;
     }

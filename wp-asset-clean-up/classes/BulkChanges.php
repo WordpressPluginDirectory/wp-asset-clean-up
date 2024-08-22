@@ -1,6 +1,9 @@
 <?php
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\MainAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
+
 /**
  *
  * Class BulkChanges

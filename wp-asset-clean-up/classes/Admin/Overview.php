@@ -1,5 +1,10 @@
 <?php
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
+
+use WpAssetCleanUp\Admin;
+use WpAssetCleanUp\Main;
+use WpAssetCleanUp\Maintenance;
+use WpAssetCleanUp\Misc;
 
 /**
  *
@@ -764,7 +769,7 @@ SQL;
                         </a> <?php if ($isExternalSrc) { ?><span data-wpacu-external-source-status></span><?php } ?>
                     </div>
                     <?php
-                    $maybeInactiveAsset = \WpAssetCleanUp\MiscAdmin::maybeIsInactiveAsset($src);
+                    $maybeInactiveAsset = Admin\MiscAdmin::maybeIsInactiveAsset($src);
 
                     if (is_array($maybeInactiveAsset) && ! empty($maybeInactiveAsset)) {
                         $uniqueStr = md5($handle . $assetType);

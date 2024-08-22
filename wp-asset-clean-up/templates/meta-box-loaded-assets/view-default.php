@@ -1,5 +1,6 @@
 <?php
-use WpAssetCleanUp\MiscAdmin;
+
+use WpAssetCleanUp\Admin\MiscAdmin;
 
 // no direct access
 if (! isset($data)) {
@@ -41,7 +42,7 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
         }
 
         foreach ($rowsAssets as $assetType => $values) {
-            $values = \WpAssetCleanUp\Sorting::sortAreaAssetRowsValues($values);
+            $values = \WpAssetCleanUp\Admin\Sorting::sortAreaAssetRowsValues($values);
 
             $assetRowsOutput = '';
 

@@ -3,6 +3,8 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\SettingsAdminOnlyForAdmin;
+
 /**
  * Class Settings
  * @package WpAssetCleanUp
@@ -28,9 +30,11 @@ class Settings
         'frontend_show',
         'frontend_show_exceptions',
 
+        // [For Admnistrators Only]
 		// Allow managing assets to:
 		'allow_manage_assets_to',
 		'allow_manage_assets_to_list',
+        // [For Admnistrators Only]
 
 		// Hide plugin's menus to make the top admin bar / left sidebar within the Dashboard cleaner (if the plugin is not used much)
 		'hide_from_admin_bar',
@@ -154,6 +158,11 @@ class Settings
         // Pro: v1.2.4.2+
         'do_not_load_plugin_features',
 
+        // [For Admnistrators Only]
+        'access_via_non_admin_user_roles',
+        'access_via_specific_non_admin_users',
+        // [/For Admnistrators Only]
+
         // Local Fonts: "font-display" CSS property
         'local_fonts_display',
         'local_fonts_display_overwrite',
@@ -216,8 +225,10 @@ class Settings
 	                                       .'vc_editable=true'."\n"
 	                                       .'preview_nonce='."\n",
 
+            // [For Admnistrators Only]
 	        'allow_manage_assets_to' => 'any_admin',
 	        'allow_manage_assets_to_list' => array(),
+            // [/For Admnistrators Only]
 
 	        // Since v1.2.9.3 (Lite) and version 1.1.0.8 (Pro), the default value is "by-location" (All Styles & All Scripts - By Location (Theme, Plugins, Custom & External))
 	        // Prior to that it's "two-lists" (All Styles & All Scripts - 2 separate lists)
@@ -281,12 +292,44 @@ class Settings
                 $settings['assets_list_layout'] = sanitize_text_field($_POST['wpacu_assets_list_layout']);
             }
 
-            if (! empty($_POST['wpacu_dom_get_type'])) {
+            if ( ! empty($_POST['wpacu_dom_get_type']) ) {
                 $settings['dom_get_type'] = sanitize_text_field($_POST['wpacu_dom_get_type']);
             }
 
             return $settings;
         });
+
+        add_filter('admin_init', array($this, 'filterSettingsOnAdminInit'), 0);
+    }
+
+    /**
+     * Due to "current_user_can", this will be called within an early "init" action
+     * @return void
+     */
+    public function filterSettingsOnAdminInit()
+    {
+        if (is_admin()) {
+            $settings = Main::instance()->settings;
+
+            if (current_user_can(Menu::$defaultAccessRole)) {
+                $allowManageAssetsArray                          = SettingsAdminOnlyForAdmin::getAnySpecifiedAdminsForAccessToAssetsManager();
+                $nonAdminRolesArray                              = SettingsAdminOnlyForAdmin::getAllNonAdminUserRolesWithAnyPluginAccessCap();
+                $nonAdminsWithPluginAccessCap                    = SettingsAdminOnlyForAdmin::getSpecificNonAdminUsersIdsWithPluginAccessCap();
+
+                $settings['allow_manage_assets_to']              = $allowManageAssetsArray['allow_manage_assets_to'];
+                $settings['allow_manage_assets_to_list']         = $allowManageAssetsArray['allow_manage_assets_to_list'];
+                $settings['access_via_non_admin_user_roles']     = ! empty($nonAdminRolesArray['non_admin_role_slugs_with_cap']) ? $nonAdminRolesArray['non_admin_role_slugs_with_cap'] : array();
+                $settings['access_via_specific_non_admin_users'] = $nonAdminsWithPluginAccessCap;
+            } else {
+                // Non-admins have no business with these settings
+                $settings['allow_manage_assets_to']              = 'any_admin';
+                $settings['allow_manage_assets_to_list']         = array();
+                $settings['access_via_non_admin_user_roles']     = array();
+                $settings['access_via_specific_non_admin_users'] = array();
+            }
+
+            Main::instance()->settings = $settings;
+        }
     }
 
 	/**
@@ -364,11 +407,6 @@ class Settings
      */
 	public function filterSettings($settings)
 	{
-        // "only to the following administrator(s):" can not be empty; if that's the case, reset it to "any administrator"
-        if ($settings['allow_manage_assets_to'] === 'chosen' && empty($settings['allow_manage_assets_to_list'])) {
-            $settings['allow_manage_assets_to'] = 'any_admin';
-        }
-
 		// Renamed "hide_assets_meta_box" to "show_assets_meta_box" (legacy)
 		if ( isset($settings['show_assets_meta_box'], $settings['hide_assets_meta_box']) && $settings['hide_assets_meta_box'] == 1 ) { // legacy
 			$settings['show_assets_meta_box'] = '0';
@@ -475,7 +513,7 @@ class Settings
         // "Settings"
         // -- "Plugin Usage Preferences"
         // -- "Do not load on specific pages"
-        // -- "Prevent features of Asset CleanUp Pro from triggering on specific pages"
+        // -- "Prevent features of Asset CleanUp Pro from triggering on certain pages"
         if ( ! empty($settings['do_not_load_plugin_features']) ) {
             $requestUriAsItIs = rawurldecode($_SERVER['REQUEST_URI']);
 
@@ -562,6 +600,32 @@ class Settings
                     }
                     // [/Google Fonts]
                 }
+            }
+        }
+
+        // This will not triggered on the first getAll() call (very early, before other WordPress functions are set)
+        // Instead, it will be triggered later on when the values below are relevant
+        if (is_admin() && function_exists('wp_get_current_user')) {
+            if (current_user_can(Menu::$defaultAccessRole)) {
+                $allowManageAssetsArray                          = SettingsAdminOnlyForAdmin::getAnySpecifiedAdminsForAccessToAssetsManager();
+                $nonAdminRolesArray                              = SettingsAdminOnlyForAdmin::getAllNonAdminUserRolesWithAnyPluginAccessCap();
+                $nonAdminsWithPluginAccessCap                    = SettingsAdminOnlyForAdmin::getSpecificNonAdminUsersIdsWithPluginAccessCap();
+
+                $settings['allow_manage_assets_to']              = $allowManageAssetsArray['allow_manage_assets_to'];
+                $settings['allow_manage_assets_to_list']         = $allowManageAssetsArray['allow_manage_assets_to_list'];
+                $settings['access_via_non_admin_user_roles']     = ! empty($nonAdminRolesArray['non_admin_role_slugs_with_cap']) ? $nonAdminRolesArray['non_admin_role_slugs_with_cap'] : array();
+                $settings['access_via_specific_non_admin_users'] = $nonAdminsWithPluginAccessCap;
+
+                // "only to the following administrator(s):" can not be empty; if that's the case, reset it to "any administrator"
+                if ($settings['allow_manage_assets_to'] === 'chosen' && empty($settings['allow_manage_assets_to_list'])) {
+                    $settings['allow_manage_assets_to'] = 'any_admin';
+                }
+            } else {
+                // Non-admins have no business with these settings
+                $settings['allow_manage_assets_to']              = 'any_admin';
+                $settings['allow_manage_assets_to_list']         = array();
+                $settings['access_via_non_admin_user_roles']     = array();
+                $settings['access_via_specific_non_admin_users'] = array();
             }
         }
 

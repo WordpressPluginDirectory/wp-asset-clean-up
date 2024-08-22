@@ -1,6 +1,7 @@
 <?php
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 /**
@@ -21,22 +22,22 @@ class Debug
 
 		foreach( array('wp', 'admin_init') as $wpacuActionHook ) {
 			add_action( $wpacuActionHook, static function() {
-				if (isset( $_GET['wpacu_get_cache_dir_size'] ) && Menu::userCanManageAssets()) {
+				if (isset( $_GET['wpacu_get_cache_dir_size'] ) && Menu::userCanAccessAssetCleanUp()) {
 					self::printCacheDirInfo();
 				}
 
 				// For debugging purposes
-				if (isset($_GET['wpacu_get_already_minified']) && Menu::userCanManageAssets()) {
+				if (isset($_GET['wpacu_get_already_minified']) && Menu::userCanAccessAssetCleanUp()) {
                     echo '<pre>'; print_r(OptimizeCommon::getAlreadyMarkedAsMinified()); echo '</pre>';
                     exit();
                 }
 
-				if (isset($_GET['wpacu_remove_already_minified']) && Menu::userCanManageAssets()) {
+				if (isset($_GET['wpacu_remove_already_minified']) && Menu::userCanAccessAssetCleanUp()) {
 					echo '<pre>'; OptimizeCommon::removeAlreadyMarkedAsMinified(); echo '</pre>';
 					exit();
 				}
 
-				if (isset($_GET['wpacu_limit_already_minified']) && Menu::userCanManageAssets()) {
+				if (isset($_GET['wpacu_limit_already_minified']) && Menu::userCanAccessAssetCleanUp()) {
 					OptimizeCommon::limitAlreadyMarkedAsMinified();
 					echo '<pre>'; print_r(OptimizeCommon::getAlreadyMarkedAsMinified()); echo '</pre>';
 					exit();
@@ -169,7 +170,7 @@ class Debug
 	 */
 	public function showDebugOptionsFront()
 	{
-	    if (! Menu::userCanManageAssets()) {
+	    if (! Menu::userCanAccessAssetCleanUp()) {
 	        return;
         }
 

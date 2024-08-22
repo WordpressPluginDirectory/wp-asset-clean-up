@@ -3,6 +3,7 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\SettingsAdmin;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 /**
@@ -150,7 +151,7 @@ HTML;
         }
 
         // only for admins
-        if (! Menu::userCanManageAssets()) {
+        if (! Menu::userCanAccessAssetCleanUp()) {
             return;
         }
 
@@ -381,7 +382,7 @@ SQL;
 	    }
 
 	    // only for admins
-	    if (! Menu::userCanManageAssets()) {
+	    if (! Menu::userCanAccessAssetCleanUp()) {
 		    return;
 	    }
 
@@ -1472,7 +1473,7 @@ SQL;
 			exit();
 		}
 
-	    if (! Menu::userCanManageAssets()) {
+	    if (! Menu::userCanAccessAssetCleanUp()) {
 	        echo 'Error: Not enough privileges to clear the cache.';
 	        exit();
         }
@@ -1497,7 +1498,7 @@ SQL;
 		    exit();
 	    }
 
-	    if (! Menu::userCanManageAssets()) {
+	    if (! Menu::userCanAccessAssetCleanUp()) {
 		    echo 'Error: Not enough privileges to clear the cache.';
 		    exit();
 	    }
@@ -1533,7 +1534,7 @@ SQL;
 	    }
 
 	    // Check privileges
-	    if (! Menu::userCanManageAssets()) {
+	    if (! Menu::userCanAccessAssetCleanUp()) {
 		    echo 'Error: Not enough privileges to perform this action.';
 		    exit();
 	    }
@@ -1560,7 +1561,7 @@ SQL;
 	    // Option: "On Assets List Layout Load, keep the groups:"
 	    if (isset($_POST['wpacu_update_asset_row_state'])) {
 		    if ( ! isset( $_POST['action'], $_POST['wpacu_asset_row_state'], $_POST['wpacu_handle'], $_POST['wpacu_handle_for'] )
-                 || ! Menu::userCanManageAssets() ) {
+                 || ! Menu::userCanAccessAssetCleanUp() ) {
 			    return;
 		    }
 
@@ -1597,7 +1598,7 @@ SQL;
     {
         if (isset($_POST['wpacu_area_update_assets_row_state'])) {
 	        if ( ! isset( $_POST['action'], $_POST['wpacu_area_assets_row_state'], $_POST['wpacu_area_handles'], $_POST['wpacu_nonce'] )
-	             || ! Menu::userCanManageAssets() ) {
+	             || ! Menu::userCanAccessAssetCleanUp() ) {
 		        return;
 	        }
 

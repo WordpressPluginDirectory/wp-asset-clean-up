@@ -1,6 +1,6 @@
 <?php
 // no direct access
-use WpAssetCleanUp\SettingsAdmin;
+use WpAssetCleanUp\Admin\SettingsAdmin;
 
 if (! isset($data)) {
 	exit;

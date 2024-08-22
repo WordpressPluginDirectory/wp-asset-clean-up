@@ -2,12 +2,16 @@
 /*
  * No direct access to this file
  */
-if (! isset($data, $selectedTabArea, $selectedSubTabArea)) {
+if (! isset($data)) {
 	exit;
 }
 
 $tabIdArea = 'wpacu-setting-google-fonts';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+
+if ( ! isset($selectedSubTabArea) ) {
+    $selectedSubTabArea = 'wpacu-google-fonts-optimize';
+}
 
 $ddOptions = array(
     'swap' => 'swap (most used)',

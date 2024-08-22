@@ -3,6 +3,8 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\Overview;
+use WpAssetCleanUp\Admin\SettingsAdmin;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 /**
@@ -30,7 +32,7 @@ class Maintenance
 		}
 
 		add_action('init', static function() {
-			if ( is_user_logged_in() && Menu::userCanManageAssets() ) {
+			if ( is_user_logged_in() && Menu::userCanAccessAssetCleanUp() ) {
 				Maintenance::combineNewOptionUpdate(); // Since v1.1.7.3 (Pro) & v1.3.6.4 (Lite)
 			}
 		});
@@ -60,7 +62,7 @@ class Maintenance
 	public function scheduleTrigger()
 	{
 		// Debugging purposes: trigger directly the code meant to be scheduled
-		if (current_user_can('administrator')) {
+		if (Menu::userCanAccessAssetCleanUp()) {
 			if (isset($_GET['wpacu_toggle_inline_code_to_combined_assets'])) {
 				self::updateAppendOrNotInlineCodeToCombinedAssets(true);
 			}
@@ -83,7 +85,47 @@ class Maintenance
 		self::updateAppendOrNotInlineCodeToCombinedAssets();
 		self::clearCacheConditionally();
 
+        // Fix v1.2.5.6 (duplicates in "usermeta" table)
+        self::removeAnyDuplicateMetaKeysFromUsersTable();
+
 		}
+
+    /**
+     * @return void
+     */
+    public static function removeAnyDuplicateMetaKeysFromUsersTable()
+    {
+        global $wpdb;
+
+        $pluginId = WPACU_PLUGIN_ID;
+
+        $sqlQuery = <<<SQL
+SELECT umeta_id, user_id, COUNT(CONCAT(user_id, meta_key)) as total_count
+FROM `{$wpdb->usermeta}`
+WHERE meta_key='{$pluginId}_user_chosen_for_access_to_assets_manager'
+GROUP BY CONCAT(user_id, meta_key)
+HAVING total_count > 1;
+SQL;
+        $rows = $wpdb->get_results($sqlQuery, ARRAY_A);
+
+        if ( ! empty($rows) ) {
+            foreach ($rows as $row) {
+                $deleteSqlQuery = <<<SQL
+DELETE FROM `{$wpdb->usermeta}`
+WHERE umeta_id != '%d' AND user_id='%d' AND meta_key='%s'
+SQL;
+
+                $deleteSqlQueryPrepared = $wpdb->prepare(
+                    $deleteSqlQuery,
+                    (int)$row['umeta_id'],
+                    (int)$row['user_id'],
+                    $pluginId . '_user_chosen_for_access_to_assets_manager'
+                );
+
+                $wpdb->query($deleteSqlQueryPrepared);
+            }
+        }
+    }
 
 	/**
 	 * @param false $isDebug
@@ -179,7 +221,7 @@ class Maintenance
 
 		if ( ($pluginSettings['combine_loaded_css'] === 'for_admin' ||
 		     (isset($pluginSettings['combine_loaded_css_for_admin_only']) && $pluginSettings['combine_loaded_css_for_admin_only'] == 1) )
-		    && Menu::userCanManageAssets() ) {
+		    && Menu::userCanAccessAssetCleanUp() ) {
             $settingsAdminClass = new SettingsAdmin();
             $settingsAdminClass->updateOption('combine_loaded_css', '');
             $settingsAdminClass->updateOption('combine_loaded_css_for_admin_only', '');
@@ -187,7 +229,7 @@ class Maintenance
 
 		if ( ($pluginSettings['combine_loaded_js'] === 'for_admin' ||
 		     (isset($pluginSettings['combine_loaded_js_for_admin_only']) && $pluginSettings['combine_loaded_js_for_admin_only'] == 1) )
-		    && Menu::userCanManageAssets() ) {
+		    && Menu::userCanAccessAssetCleanUp() ) {
             $settingsAdminClass = new SettingsAdmin();
             $settingsAdminClass->updateOption('combine_loaded_js', '');
             $settingsAdminClass->updateOption('combine_loaded_js_for_admin_only', '');

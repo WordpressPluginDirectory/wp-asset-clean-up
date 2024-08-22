@@ -1,6 +1,6 @@
 <?php
 // no direct access
-use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
 
 if (! isset($data)) {
 	exit;
@@ -22,7 +22,7 @@ $data['rows_assets'] = $assetRowsOutputsArray = array();
 require_once __DIR__.'/_asset-rows.php';
 
 if ( ! empty($data['rows_assets']) ) {
-    $values = \WpAssetCleanUp\Sorting::sortAreaAssetRowsValues($data['rows_assets']['all']);
+    $values = \WpAssetCleanUp\Admin\Sorting::sortAreaAssetRowsValues($data['rows_assets']['all']);
 
     $totalStyles = $totalScripts = 0;
 

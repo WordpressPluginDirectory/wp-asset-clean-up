@@ -1,8 +1,15 @@
 <?php
 /** @noinspection PhpUndefinedFunctionInspection */
 
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
 
+// [wpacu_lite]
+use WpAssetCleanUp\Menu;
+// [/wpacu_lite]
+
+use WpAssetCleanUp\FileSystem;
+use WpAssetCleanUp\Misc;
+use WpAssetCleanUp\OptimiseAssets;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCss;
 use WpAssetCleanUp\OptimiseAssets\OptimizeJs;

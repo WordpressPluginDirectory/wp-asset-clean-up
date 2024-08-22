@@ -2,12 +2,12 @@
 /*
  * No direct access to this file
  */
-if (! isset($data, $selectedTabArea)) {
+if (! isset($data)) {
 	exit;
 }
 
 $tabIdArea = 'wpacu-setting-disable-rss-feed';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
 
 $disableRssFeedAreaStyle = ($data['disable_rss_feed'] == 1) ? 'opacity: 1;' : 'opacity: 0.4;';
 ?>

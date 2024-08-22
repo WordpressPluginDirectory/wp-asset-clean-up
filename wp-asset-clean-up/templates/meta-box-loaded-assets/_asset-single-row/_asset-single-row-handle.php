@@ -3,7 +3,7 @@
  * The file is included from /templates/meta-box-loaded-assets/_asset-single-row.php
 */
 
-use WpAssetCleanUp\MainAdmin;
+use WpAssetCleanUp\Admin\MainAdmin;
 
 if ( ! isset($data, $assetType, $assetTypeS, $assetTypeAbbr, $isCoreFile, $hideCoreFiles, $childHandles) ) {
     exit(); // no direct access

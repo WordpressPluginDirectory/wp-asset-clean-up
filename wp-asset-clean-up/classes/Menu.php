@@ -3,6 +3,12 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\AssetsManagerAdmin;
+use WpAssetCleanUp\Admin\Info;
+use WpAssetCleanUp\Admin\Overview;
+use WpAssetCleanUp\Admin\SettingsAdmin;
+use WpAssetCleanUp\Admin\Tools;
+
 /**
  * Class Menu
  * @package WpAssetCleanUp
@@ -17,7 +23,12 @@ class Menu
 	/**
 	 * @var string
 	 */
-	private static $_capability = 'administrator';
+	public static $defaultAccessRole = 'administrator';
+
+    /**
+     * @var string
+     */
+    public static $pluginAccessCap = 'assetcleanup_manager';
 
     /**
      * Menu constructor.
@@ -79,7 +90,7 @@ class Menu
     public function activeMenu()
     {
 	    // User should be of 'administrator' role and allowed to activate plugins
-	    if (! self::userCanManageAssets()) {
+	    if (! self::userCanAccessAssetCleanUp()) {
 		    return;
 	    }
 
@@ -211,15 +222,18 @@ class Menu
     {
         add_action('wp_loaded', static function() {
             ob_start(static function($htmlSource) {
+                $htmlSource = preg_replace(
+                    '#<li class="wp-has-submenu wp-not-current-submenu (.*?)" id="menu-settings"#',
+                    '<li class="wp-has-submenu wp-has-current-submenu \\1" id="menu-settings"',
+                    $htmlSource
+                );
+
                 $reps = array(
-                    '<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-settings menu-top-last" id="menu-settings">' =>
-                        '<li class="wp-has-submenu wp-has-current-submenu wp-menu-open menu-top menu-icon-settings menu-top-last" id="menu-settings">',
-
                     '<a href=\'options-general.php\' class="wp-has-submenu wp-not-current-submenu' =>
-                        '<a href=\'options-general.php\' class="wp-has-submenu wp-has-current-submenu wp-menu-open',
+                    '<a href=\'options-general.php\' class="wp-has-submenu wp-has-current-submenu wp-menu-open',
 
-                    '<li><a href=\''.admin_url('admin.php?page=wpassetcleanup_settings').'\'>' . WPACU_PLUGIN_TITLE . '</a></li></ul>' =>
-                        '<li class="current"><a class="current" aria-current="page" href=\''.admin_url('admin.php?page=wpassetcleanup_settings').'\'>' . WPACU_PLUGIN_TITLE . '</a></li></ul>'
+                    '<li><a href=\''.admin_url('admin.php?page=wpassetcleanup_settings').'\'>' . WPACU_PLUGIN_TITLE . '</a></li>' =>
+                    '<li class="current"><a class="current" aria-current="page" href=\''.admin_url('admin.php?page=wpassetcleanup_settings').'\'>' . WPACU_PLUGIN_TITLE . '</a></li>'
                 );
 
                 return str_replace(array_keys($reps), array_values($reps), $htmlSource);
@@ -228,33 +242,20 @@ class Menu
     }
 
     /**
-     * @param array|string $params
      *
      * @return bool
      */
-    public static function userCanManageAssets($params = array())
+    public static function userCanAccessAssetCleanUp()
 	{
-        if ( function_exists('is_user_logged_in') && ! is_user_logged_in() ) {
-            return false; // it's a must that the user has to be logged-in
-        }
-
-        if ( is_string($params) ) {
-            $params = array($params);
-        }
-
-        // Note: Sometimes, the function "is_super_admin" is called before the "userCanManageAssets" method
-        // To avoid loading the "Menu" class in the first place (for optimization)
-		if ( in_array('skip_is_super_admin', $params) || is_super_admin() ) {
+		if (is_super_admin()) {
 			return true; // For security reasons, super admins will always be able to access the plugin's settings
 		}
 
-		// Has self::$_capability been changed? Just user current_user_can()
-		if (self::getAccessCapability() !== self::$_capability) {
-			return current_user_can(self::getAccessCapability());
-		}
+        if (current_user_can(self::$defaultAccessRole) || current_user_can(self::$pluginAccessCap)) {
+            return true;
+        }
 
-		// self::$_capability default value: "administrator"
-		return current_user_can(self::getAccessCapability());
+		return false;
 	}
 
 	/**
@@ -265,15 +266,21 @@ class Menu
 		return isset($_GET['page']) && is_string($_GET['page']) && in_array($_GET['page'], self::$allMenuPages);
 	}
 
-	/**
-	 * Here self::$_capability can be overridden
-	 *
-	 * @return mixed|void
-	 */
-	public static function getAccessCapability()
-	{
-		return apply_filters('wpacu_access_role', self::$_capability);
-	}
+    /**
+     * @return string
+     */
+    public static function getAccessCapability()
+    {
+        // You can be an admin, and have a user registered that has a 'subscriber' role with limited access to other sensitive parts of the website
+        // You can give him/her access to Asset CleanUp (e.g. he/she can be a developer that needs access to the plugin's settings to optimize the website)
+        // Anyone with $_plugin_access_capability capability could access the plugin
+        if (current_user_can(self::$pluginAccessCap)) {
+            return self::$pluginAccessCap;
+        }
+
+        // Those with 'administrator' role will always be able to access it
+        return self::$defaultAccessRole;
+    }
 
 	/**
 	 * @param $actions
@@ -322,7 +329,7 @@ class Menu
 
 		// Only show it to the user that has "administrator" access, and it's in the following list (if a certain list of admins is provided)
 		// "Settings" -> "Plugin Usage Preferences" -> "Allow managing assets to:"
-		if (self::userCanManageAssets() && AssetsManager::currentUserCanViewAssetsList()) {
+		if (self::userCanAccessAssetCleanUp() && AssetsManager::currentUserCanViewAssetsList()) {
 			/*
 			 * You can reset the default $actions with your own array, or simply merge them
 			 * here I want to rewrite my Edit link, remove the Quick-link, and introduce a
@@ -338,7 +345,7 @@ class Menu
 	}
 
 	/**
-	 * Message to show if the user does not have self::$_capability role and tries to access a plugin's page
+	 * Message to show if the user tries to access a plugin's page without having any right to do so
 	 */
 	public function pluginPagesAccessDenied()
 	{
@@ -347,19 +354,22 @@ class Menu
 			return;
 		}
 
-		$userMeta = get_userdata(get_current_user_id());
+		$userMeta  = get_userdata(get_current_user_id());
 		$userRoles = $userMeta->roles;
 
-		wp_die(
-			__('Sorry, you are not allowed to access this page.').'<br /><br />'.
-			sprintf(__('Asset CleanUp requires "%s" role and the ability to activate plugins in order to access its pages.', 'wp-asset-clean-up'), '<span style="color: green; font-weight: bold;">'.self::getAccessCapability().'</span>').'<br />'.
-			sprintf(__('Your current role(s): <strong>%s</strong>', 'wp-asset-clean-up'), implode(', ', $userRoles)).'<br /><br />'.
-			__('The value (in green color) can be changed if you use the following snippet in functions.php (within your theme/child theme or a custom plugin):').'<br />'.
-			'<p><code style="background: #f2f3ea; padding: 5px;">add_filter(\'wpacu_access_role\', function($role) { return \'your_role_here\'; });</code></p>'.
-			'<p>If the snippet is not used, it will default to "administrator".</p>'.
-			'<p>Possible values: <strong>manage_options</strong>, <strong>activate_plugins</strong>, <strong>manager</strong> etc.</p>'.
-			'<p>Read more: <a target="_blank" href="https://wordpress.org/support/article/roles-and-capabilities/#summary-of-roles">https://wordpress.org/support/article/roles-and-capabilities/#summary-of-roles</a></p>',
-			403
-		);
+        $accessDeniedMsg = __('Sorry, you are not allowed to access this page.').'<br /><br />'.
+            sprintf(
+                __('By default, for security reasons, %s can be accesed within the Dashboard by <strong>Super Admins</strong> (somebody with access to the site network administration features and all other features) and <strong>Administrators</strong> (somebody who has access to all the administration features within a single site).', 'wp-asset-clean-up'),
+                WPACU_PLUGIN_TITLE
+            ) . '<br /><br />';
+
+
+        $accessDeniedMsg .= sprintf(__('Your current role(s): <strong>%s</strong>', 'wp-asset-clean-up'), implode(', ', $userRoles)) . '<br /><br />';
+
+        $accessDeniedMsg .= __('Please reach out to the administrator of this website if you believe you have the right to access this page.', 'wp-asset-clean-up').'<br /><br />';
+
+        $accessDeniedMsg .= '<div>Read more about WordPress user roles: <a target="_blank" href="https://wordpress.org/support/article/roles-and-capabilities/#summary-of-roles">https://wordpress.org/support/article/roles-and-capabilities/#summary-of-roles</a></div>';
+
+		wp_die( $accessDeniedMsg, 403 );
 	}
 }

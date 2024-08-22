@@ -511,7 +511,7 @@ class MainFront
                         : array();
                 }
 
-                if ( ! empty(Main::instance()->postTypesUnloaded['styles'])) {
+                if ( ! empty(Main::instance()->postTypesUnloaded['styles']) ) {
                     foreach (Main::instance()->postTypesUnloaded['styles'] as $handleStyle) {
                         $list[] = $handleStyle;
                     }
@@ -551,34 +551,34 @@ class MainFront
             // Post, Page or Front-page?
             $toRemove = Main::instance()->getAssetsUnloadedPageLevel();
 
-            $jsonList = @json_decode($toRemove);
+            $jsonList = @json_decode( $toRemove );
 
             $list = array();
 
-            if (isset($jsonList->scripts)) {
-                $list = (array)$jsonList->scripts;
+            if ( isset( $jsonList->scripts ) ) {
+                $list = (array) $jsonList->scripts;
             }
 
             // Any global unloaded styles? Append them
-            if ( ! empty($globalUnload['scripts'])) {
-                foreach ($globalUnload['scripts'] as $handleScript) {
+            if ( ! empty( $globalUnload['scripts'] ) ) {
+                foreach ( $globalUnload['scripts'] as $handleScript ) {
                     $list[] = $handleScript;
                 }
             }
 
-            if (MainFront::isSingularPage()) {
+            if ( MainFront::isSingularPage() ) {
                 // Any bulk unloaded styles (e.g. for all pages belonging to a post type)? Append them
-                if (empty(Main::instance()->postTypesUnloaded)) {
+                if ( empty( Main::instance()->postTypesUnloaded ) ) {
                     $post = Main::instance()->getCurrentPost();
 
                     // Make sure the post_type is set; it's not in specific pages (e.g. BuddyPress ones)
-                    Main::instance()->postTypesUnloaded = (isset($post->post_type) && $post->post_type)
-                        ? Main::instance()->getBulkUnload('post_type', $post->post_type)
+                    Main::instance()->postTypesUnloaded = ( isset( $post->post_type ) && $post->post_type )
+                        ? Main::instance()->getBulkUnload( 'post_type', $post->post_type )
                         : array();
                 }
 
-                if ( ! empty(Main::instance()->postTypesUnloaded['scripts'])) {
-                    foreach (Main::instance()->postTypesUnloaded['scripts'] as $handleStyle) {
+                if ( ! empty( Main::instance()->postTypesUnloaded['scripts'] ) ) {
+                    foreach ( Main::instance()->postTypesUnloaded['scripts'] as $handleStyle ) {
                         $list[] = $handleStyle;
                     }
                 }
@@ -908,7 +908,7 @@ class MainFront
 		if ( ! empty(Main::instance()->allUnloadedAssets['styles']) &&
 		    in_array('photoswipe', Main::instance()->allUnloadedAssets['styles'])) {
 			?>
-			<?php if (current_user_can('administrator')) { ?><!-- Asset CleanUp: "photoswipe" unloaded (avoid printing useless HTML) --><?php } ?>
+			<?php if (Menu::userCanAccessAssetCleanUp()) { ?><!-- Asset CleanUp: "photoswipe" unloaded (avoid printing useless HTML) --><?php } ?>
 			<style <?php echo Misc::getStyleTypeAttribute(); ?>>.pswp { display: none; }</style>
 			<?php
 		}
@@ -1044,7 +1044,7 @@ class MainFront
 			return $this->skipAssets[$getForAssetsType];
 		}
 
-		$ownScriptsIfAdminIsLoggedIn = current_user_can( 'administrator' ) && AssetsManager::instance()->frontendShow()
+		$ownScriptsIfAdminIsLoggedIn = Menu::userCanAccessAssetCleanUp() && AssetsManager::instance()->frontendShow()
 			? OwnAssets::getOwnAssetsHandles( $getForAssetsType )
 			: array();
 

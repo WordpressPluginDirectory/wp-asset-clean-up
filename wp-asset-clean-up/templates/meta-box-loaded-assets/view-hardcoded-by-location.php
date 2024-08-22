@@ -1,11 +1,12 @@
 <?php
+
+use WpAssetCleanUp\Admin\Info;
+use WpAssetCleanUp\Admin\MiscAdmin;
+use WpAssetCleanUp\Admin\Sorting;
 use WpAssetCleanUp\HardcodedAssets;
-use WpAssetCleanUp\Info;
 use WpAssetCleanUp\Main;
 use WpAssetCleanUp\Misc;
-use WpAssetCleanUp\MiscAdmin;
 use WpAssetCleanUp\ObjectCache;
-use WpAssetCleanUp\Sorting;
 
 if (! isset($data)) {
 	exit; // no direct access

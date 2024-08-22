@@ -1,10 +1,15 @@
 <?php
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
 
+use WpAssetCleanUp\Main;
+use WpAssetCleanUp\Menu;
+use WpAssetCleanUp\Misc;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCss;
 use WpAssetCleanUp\OptimiseAssets\OptimizeJs;
+use WpAssetCleanUp\Settings;
 use WpAssetCleanUp\ThirdParty\Browser;
+use WpAssetCleanUp\Update;
 
 /**
  * Class Tools
@@ -423,7 +428,7 @@ class Tools
 
 	    $return .= "\n" . 'XML-RPC protocol: '. $xmlProtocolStatus . "\n";
 
-	    $return .= "\n" . '# '.WPACU_PLUGIN_TITLE.': CSS/JS Caching Storage'. "\n";
+	    $return .= "\n" . '# '.WPACU_PLUGIN_TITLE.': CSS/JS Cache Storage'. "\n";
 
 	    $storageStats = OptimizeCommon::getStorageStats(false);
 
@@ -531,7 +536,7 @@ SQL;
 	 */
 	public static function downloadFile($localPathToFile)
     {
-	    if (! Menu::userCanManageAssets()) {
+	    if (! Menu::userCanAccessAssetCleanUp()) {
 		    exit();
 	    }
 
@@ -550,7 +555,7 @@ SQL;
 	 */
 	public function downloadSystemInfo()
     {
-	    if (! Menu::userCanManageAssets()) {
+	    if (! Menu::userCanAccessAssetCleanUp()) {
 		    exit();
 	    }
 
@@ -595,7 +600,7 @@ SQL;
 			exit('Error: Action needs to be confirmed.');
 		}
 
-		if ( ! Menu::userCanManageAssets() ) {
+		if ( ! Menu::userCanAccessAssetCleanUp() ) {
 			exit();
 		}
 

@@ -1,7 +1,10 @@
 <?php
 /** @noinspection MultipleReturnStatementsInspection */
 
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
+
+use WpAssetCleanUp\HardcodedAssets;
+use WpAssetCleanUp\Misc;
 
 /**
  * Class Sorting

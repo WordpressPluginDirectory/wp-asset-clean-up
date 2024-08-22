@@ -3,8 +3,8 @@
  * No direct access to this file
  */
 
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\MainFront;
-use WpAssetCleanUp\MiscAdmin;
 use WpAssetCleanUp\Update;
 
 if (! isset($data)) {

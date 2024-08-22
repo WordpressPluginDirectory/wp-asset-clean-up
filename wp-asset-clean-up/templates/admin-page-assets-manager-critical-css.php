@@ -1,8 +1,9 @@
 <?php
-use WpAssetCleanUp\OptimiseAssets\CriticalCssAdmin;
-use WpAssetCleanUp\Misc;
-use WpAssetCleanUp\MiscAdmin;
+
+use WpAssetCleanUp\Admin\CriticalCssAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\AssetsManager;
+use WpAssetCleanUp\Misc;
 
 /*
  * No direct access to this file

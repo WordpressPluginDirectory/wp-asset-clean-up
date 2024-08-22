@@ -1,13 +1,15 @@
 <?php
 /** @noinspection MultipleReturnStatementsInspection */
 
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
+
+use WpAssetCleanUp\OwnAssets;
 
 /**
- * Class AjaxSearchAutocomplete
+ * Class AjaxSearchPagesAutocomplete
  * @package WpAssetCleanUp
  */
-class AjaxSearchAutocomplete
+class AjaxSearchPagesAutocomplete
 {
 	/**
 	 * AjaxSearchAutocomplete constructor.
@@ -28,10 +30,11 @@ class AjaxSearchAutocomplete
 	 */
 	public static function maybePreventWpmlPluginFromFiltering()
 	{
-		if ( ! (isset($_REQUEST['action'], $_REQUEST['wpacu_term'], $GLOBALS['sitepress']) &&
+		if ( ! ( isset($_REQUEST['action'], $_REQUEST['wpacu_term'], $GLOBALS['sitepress']) &&
 		    $_REQUEST['action'] === WPACU_PLUGIN_ID . '_autocomplete_search' &&
 		    $_REQUEST['wpacu_term'] &&
-		    wpacuIsPluginActive('sitepress-multilingual-cms/sitepress.php')) ) {
+		    wpacuIsPluginActive('sitepress-multilingual-cms/sitepress.php') &&
+            class_exists('\WPML_URL_Filters') ) ) {
 			return;
 		}
 
@@ -103,13 +106,12 @@ class AjaxSearchAutocomplete
 	    	return;
 	    }
 
-	    wp_enqueue_script(
-		    OwnAssets::$ownAssets['scripts']['autocomplete_search']['handle'],
-		    plugins_url(OwnAssets::$ownAssets['scripts']['autocomplete_search']['rel_path'], WPACU_PLUGIN_FILE),
-		    array('jquery', 'jquery-ui-autocomplete'),
-		    OwnAssets::assetVer(OwnAssets::$ownAssets['scripts']['autocomplete_search']['rel_path']),
-		    true
-	    );
+        wp_enqueue_script(
+            OwnAssets::$ownAssets['scripts']['autocomplete_search']['handle'],
+            plugins_url(OwnAssets::$ownAssets['scripts']['autocomplete_search']['rel_path'], WPACU_PLUGIN_FILE),
+            array('jquery', 'jquery-ui-autocomplete'),
+            OwnAssets::assetVer(OwnAssets::$ownAssets['scripts']['autocomplete_search']['rel_path'])
+        );
 
 	    wp_localize_script(OwnAssets::$ownAssets['scripts']['autocomplete_search']['handle'], 'wpacu_autocomplete_search_obj', array(
 		    'ajax_url'       => esc_url(admin_url('admin-ajax.php')),

@@ -4,12 +4,12 @@
  */
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
-if (! isset($data, $selectedTabArea)) {
+if (! isset($data)) {
 	exit;
 }
 
 $tabIdArea = 'wpacu-setting-strip-the-fat';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
 ?>
 <div id="<?php echo esc_attr($tabIdArea); ?>" class="wpacu-settings-tab-content" <?php echo wp_kses($styleTabContent, array('style' => array())); ?>>
     <h2 class="wpacu-settings-area-title"><span class="dashicons dashicons-info"></span> <?php _e('Prevent useless and often large CSS &amp; JS files increasing your total page size', 'wp-asset-clean-up'); ?></h2>

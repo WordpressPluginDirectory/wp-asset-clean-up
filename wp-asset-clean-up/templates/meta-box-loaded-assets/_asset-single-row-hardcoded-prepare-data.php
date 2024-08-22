@@ -1,6 +1,6 @@
 <?php
+use WpAssetCleanUp\Admin\MainAdmin;
 use WpAssetCleanUp\HardcodedAssets;
-use WpAssetCleanUp\MainAdmin;
 use WpAssetCleanUp\Misc;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 

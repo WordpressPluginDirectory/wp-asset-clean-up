@@ -6,7 +6,7 @@ if (! isset($data)) {
 <table class="wpacu-form-table">
     <tr valign="top">
         <th scope="row" class="setting_title">
-            <label><?php echo sprintf(__('Hide %s menus', 'wp-asset-clean-up'), '"'.WPACU_PLUGIN_TITLE.'"'); ?></label>
+            <?php echo sprintf(__('Hide %s menus', 'wp-asset-clean-up'), '"'.WPACU_PLUGIN_TITLE.'"'); ?>
             <p class="wpacu_subtitle"><small><em><?php _e('Are you rarely using the plugin and want to make some space in the admin menus?', 'wp-asset-clean-up'); ?></em></small></p>
         </th>
         <td>

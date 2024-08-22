@@ -1,5 +1,5 @@
 <?php
-use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
 
 if (! isset($data)) {
 	exit;

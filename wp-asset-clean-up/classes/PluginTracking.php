@@ -3,6 +3,8 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\SettingsAdmin;
+
 /**
  * Class PluginTracking
  * @package WpAssetCleanUp
@@ -236,7 +238,7 @@ class PluginTracking
 	 */
 	public function checkForOptIn()
 	{
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			return;
 		}
 
@@ -259,7 +261,7 @@ class PluginTracking
 	 */
 	public function checkForOptOut()
 	{
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			return 'Unauthorized';
 		}
 
@@ -325,7 +327,7 @@ class PluginTracking
 			return false;
 		}
 
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			return false;
 		}
 

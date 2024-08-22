@@ -3,8 +3,8 @@
  * The file is included from view-hardcoded-default.php, and it's relevant only for the hardcoded assets (non-enqueued)
 */
 
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\HardcodedAssets;
-use WpAssetCleanUp\MiscAdmin;
 
 if (! isset($data)) {
     exit; // no direct access

@@ -1,9 +1,14 @@
 <?php
 /** @noinspection MultipleReturnStatementsInspection */
 
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
 
+use WpAssetCleanUp\FileSystem;
+use WpAssetCleanUp\Main;
+use WpAssetCleanUp\Menu;
+use WpAssetCleanUp\Misc;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
+use WpAssetCleanUp\Settings;
 
 /**
  * Class ImportExport
@@ -64,7 +69,7 @@ SQL;
 	 */
 	public function doExport()
 	{
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			return;
 		}
 
@@ -198,7 +203,7 @@ SQL;
 	 */
 	public function doImport()
 	{
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			return;
 		}
 

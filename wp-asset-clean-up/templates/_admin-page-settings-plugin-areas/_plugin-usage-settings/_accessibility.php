@@ -6,7 +6,7 @@ if (! isset($data)) {
 <table class="wpacu-form-table">
     <tr valign="top">
         <th scope="row" class="setting_title">
-            <label><?php _e('Input Fields Style', 'wp-asset-clean-up'); ?>:</label>
+            <?php _e('Input Fields Style', 'wp-asset-clean-up'); ?>:
             <p class="wpacu_subtitle"><small><em><?php _e('How would you like to view the checkboxes / selectors?', 'wp-asset-clean-up'); ?></em></small></p>
             <p class="wpacu_read_more"><a href="https://assetcleanup.com/docs/?p=95" target="_blank"><?php _e('Read More', 'wp-asset-clean-up'); ?></a></p>
         </th>

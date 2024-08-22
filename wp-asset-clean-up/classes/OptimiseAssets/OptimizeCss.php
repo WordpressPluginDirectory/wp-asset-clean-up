@@ -1600,7 +1600,7 @@ class OptimizeCss
 
         $pluginSettings = Main::instance()->settings;
 
-        if ($pluginSettings['test_mode'] && ! Menu::userCanManageAssets()) {
+        if ($pluginSettings['test_mode'] && ! Menu::userCanAccessAssetCleanUp()) {
             return false; // Do not combine anything if "Test Mode" is ON and the user is in guest mode (not logged-in)
         }
 
@@ -1622,7 +1622,7 @@ class OptimizeCss
             // The option is no longer used since v1.1.7.3 (Pro) & v1.3.6.4 (Lite)
             if ( ($pluginSettings['combine_loaded_css'] === 'for_admin'
                   || $pluginSettings['combine_loaded_css_for_admin_only'] == 1)
-                 && Menu::userCanManageAssets()) {
+                 && Menu::userCanAccessAssetCleanUp()) {
 
                 return true; // Do combine
             }

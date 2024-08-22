@@ -1,9 +1,9 @@
 <?php
-namespace WpAssetCleanUp\OptimiseAssets;
+namespace WpAssetCleanUp\Admin;
 
 use WpAssetCleanUp\Main;
 use WpAssetCleanUp\Misc;
-use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\OptimiseAssets\MinifyCss;
 
 /**
  * Class CriticalCssAdmin
@@ -265,7 +265,7 @@ class CriticalCssAdmin
                 $dbKeyPrefix = 'custom_taxonomy';
             }
 
-            $condition = CriticalCssAdmin::isEnabledForAtLeastOnePageType($data['critical_css_config'], $dbKeyPrefix);
+            $condition = self::isEnabledForAtLeastOnePageType($data['critical_css_config'], $dbKeyPrefix);
         } elseif ($wpacuFor === 'media_attachment') {
             $condition = in_array('media', $data['critical_css_tabs_all_enabled_locations']);
         } else {

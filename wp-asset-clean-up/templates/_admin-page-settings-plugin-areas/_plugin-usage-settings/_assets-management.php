@@ -1,5 +1,7 @@
 <?php
-use WpAssetCleanUp\SettingsAdmin;
+use WpAssetCleanUp\Admin\SettingsAdmin;
+use WpAssetCleanUp\Admin\SettingsAdminOnlyForAdmin;
+use WpAssetCleanUp\Menu;
 
 if (! isset($data, $postTypesList)) {
 	exit;
@@ -165,59 +167,66 @@ if (! isset($data, $postTypesList)) {
             </div>
         </td>
     </tr>
-    <tr valign="top">
-        <th scope="row" class="setting_title">
-            <label for="wpacu_frontend"><?php _e('Allow managing assets to:', 'wp-asset-clean-up'); ?></label>
-            <p class="wpacu_subtitle"><small><em><?php _e('Only the chosen administrators will have access to the plugin\'s CSS &amp; JS Manager.', 'wp-asset-clean-up'); ?></em></small></p>
-        </th>
-        <td>
-            <?php
-            $currentUserId = get_current_user_id();
 
-            $args = array(
-                'role'    => 'administrator',
-                'orderby' => 'user_nicename',
-                'order'   => 'ASC'
-            );
+    <?php
+    if (current_user_can(Menu::$defaultAccessRole)) {
+        $allowManageAssetsText = __('Only the chosen administrators will have access to the plugin\'s CSS &amp; JS Manager.', 'wp-asset-clean-up');
+    ?>
+        <tr valign="top">
+            <th scope="row" class="setting_title">
+                <label for="wpacu-allow-manage-assets-to-select"><?php _e('Allow managing assets to:', 'wp-asset-clean-up'); ?></label>
+                <p class="wpacu_subtitle"><small><em><?php echo esc_html($allowManageAssetsText); ?></em></small></p>
+            </th>
+            <td>
+                <?php
+                $currentUserId = get_current_user_id();
 
-            $users = get_users( $args );
-            ?>
-            <select style="vertical-align: top;" id="wpacu-allow-manage-assets-to-select" name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[allow_manage_assets_to]">
-                <option <?php if (in_array($data['allow_manage_assets_to'], array('', 'any_admin'))) { ?>selected="selected"<?php } ?> value="any_admin">any administrator</option>
-                <option <?php if ($data['allow_manage_assets_to'] === 'chosen') { ?>selected="selected"<?php } ?> value="chosen">only to the following administrator(s):</option>
-            </select>
-            &nbsp;
-            <div <?php if (in_array($data['allow_manage_assets_to'], array('', 'any_admin'))) { ?>class="wpacu_hide"<?php } ?>
-                 id="wpacu-allow-manage-assets-to-select-list-area">
-                <select id="wpacu-allow-manage-assets-to-select-list"
-                        name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[allow_manage_assets_to_list][]"
-                    <?php if ($data['input_style'] !== 'standard') { ?>
-                        class="wpacu_chosen_can_be_later_enabled"
-                        data-placeholder="Choose the admin(s) who will access the list..."
-                    <?php } ?>
-                        multiple="multiple">
-                    <?php
-                    foreach ( $users as $user ) {
-                        $appendText = $selected = '';
-
-                        if ($currentUserId === $user->ID) {
-                            $appendText = ' &#10141; yourself';
-                        }
-
-                        if (isset($data['allow_manage_assets_to_list']) && is_array($data['allow_manage_assets_to_list']) && in_array($user->ID, $data['allow_manage_assets_to_list'])) {
-                            $selected = 'selected="selected"';
-                        }
-
-                        echo '<option '.$selected.' value="'.$user->ID.'">' . esc_html( $user->display_name ) . ' (' . esc_html( $user->user_email ) . ')'.$appendText.'</option>';
-                    }
-                    ?>
+                $allAdminUsers = SettingsAdminOnlyForAdmin::getAllAdminUsers();
+                ?>
+                <select style="vertical-align: top;" id="wpacu-allow-manage-assets-to-select"
+                        name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[allow_manage_assets_to]">
+                    <option <?php if (in_array($data['allow_manage_assets_to'], array('', 'any_admin'))) { ?>selected="selected"<?php } ?> value="any_admin">any administrator</option>
+                    <option <?php if ($data['allow_manage_assets_to'] === 'chosen') { ?>selected="selected"<?php } ?> value="chosen">only to the following admin(s):</option>
                 </select>
-                <div style="margin: 2px 0 0;"><small>This is a multiple selection drop-down. If nothing is chosen from the list, it will default to "any administrator".</small></div>
-            </div>
+                &nbsp;
+                <div <?php if (in_array($data['allow_manage_assets_to'], array('', 'any_admin'))) { ?>class="wpacu_hide"<?php } ?>
+                     id="wpacu-allow-manage-assets-to-select-list-area">
+                    <select id="wpacu-allow-manage-assets-to-select-list"
+                            name="<?php echo WPACU_PLUGIN_ID . '_settings'; ?>[allow_manage_assets_to_list][]"
+                        <?php if ($data['input_style'] !== 'standard') { ?>
+                            class="wpacu_chosen_can_be_later_enabled"
+                            data-placeholder="Choose the admin(s) who will access the list..."
+                        <?php } ?>
+                            multiple="multiple">
+                        <?php
+                        foreach ( $allAdminUsers as $user ) {
+                            $appendText = $selected = '';
 
-            <div style="margin: 10px 0 0;"><p>Some people that have admin access might be confused by the CSS/JS manager (which could be for the developer of the website). If they are mostly editing articles, updating WooCommerce products and so on, there's no point for them to keep seeing a cluttered edit post/page with CSS/JS assets that can even be changed by mistake. You can leave this only to the developers with "administrator" roles.</p></div>
-        </td>
-    </tr>
+                            if ($currentUserId === $user->ID) {
+                                $appendText = ' &#10141; yourself';
+                            }
+
+                            if (isset($data['allow_manage_assets_to_list']) && is_array($data['allow_manage_assets_to_list']) && in_array($user->ID, $data['allow_manage_assets_to_list'])) {
+                                $selected = 'selected="selected"';
+                            }
+
+                            echo '<option '.$selected.' value="'.$user->ID.'">' . esc_html( $user->display_name ) . ' (' . esc_html( $user->user_email ) . ')'.$appendText.'</option>';
+                        }
+                        ?>
+                    </select>
+                    <div style="margin: 2px 0 0;"><small>This is a multiple selection drop-down. If nothing is chosen from the list, it will default to "any administrator" from the list.</small></div>
+                </div>
+
+                <div style="margin: 10px 0 0;"><p>Some people that have admin access might be confused by the CSS/JS manager (which could be for the developer of the website). If they are mostly editing articles, updating WooCommerce products and so on, there's no point for them to keep seeing a cluttered edit post/page with CSS/JS assets that can even be changed by mistake. You can leave this only to the developers with "administrator" roles.</p></div>
+
+                <div style="margin-top: 10px;">
+                    <strong>Note: </strong> Anyone with access to this option, will be able to change it, including the restrictive users. If anyone with access to this plugin would want to enable the CSS/JS manager for any reason, they have the possiblity to do that.
+                </div>
+            </td>
+        </tr>
+    <?php
+    }
+    ?>
     <tr valign="top">
         <th scope="row" class="setting_title">
             <label for="wpacu_assets_list_layout"><?php _e('Assets List Layout', 'wp-asset-clean-up'); ?></label>
@@ -261,7 +270,7 @@ if (! isset($data, $postTypesList)) {
 
     <tr valign="top">
         <th scope="row">
-            <label><?php _e('On Assets List Layout Load, keep the groups:', 'wp-asset-clean-up'); ?></label>
+            <?php _e('On Assets List Layout Load, keep the groups:', 'wp-asset-clean-up'); ?>
         </th>
         <td>
             <ul class="assets_list_layout_areas_status_choices">
@@ -293,7 +302,7 @@ if (! isset($data, $postTypesList)) {
 
     <tr valign="top">
         <th scope="row">
-            <label><?php _e('On Assets List Layout Load, keep "Inline code associated with this handle" area', 'wp-asset-clean-up'); ?>:</label>
+            <?php _e('On Assets List Layout Load, keep "Inline code associated with this handle" area', 'wp-asset-clean-up'); ?>:
         </th>
         <td>
             <ul class="assets_list_inline_code_status_choices">

@@ -3,6 +3,8 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\MiscAdmin;
+use WpAssetCleanUp\Admin\SettingsAdminOnlyForAdmin;
 use WpAssetCleanUp\OptimiseAssets\DynamicLoadedAssets;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
@@ -103,7 +105,9 @@ class AssetsManager
 	 */
 	public static function currentUserCanViewAssetsList()
 	{
-		if ( Main::instance()->settings['allow_manage_assets_to'] === 'chosen' && ! empty(Main::instance()->settings['allow_manage_assets_to_list']) ) {
+        Main::instance()->settings = SettingsAdminOnlyForAdmin::getAnySpecifiedAdminsForAccessToAssetsManager(Main::instance()->settings);
+
+        if ( Main::instance()->settings['allow_manage_assets_to'] === 'chosen' && ! empty(Main::instance()->settings['allow_manage_assets_to_list']) ) {
 			$wpacuCurrentUserId = get_current_user_id();
 
 			if ( ! in_array( $wpacuCurrentUserId, Main::instance()->settings['allow_manage_assets_to_list'] ) ) {
@@ -342,7 +346,7 @@ class AssetsManager
 		}
 
 		// Check privileges
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			echo 'Error: Not enough privileges to perform this action.';
 			exit();
 		}
@@ -384,7 +388,7 @@ class AssetsManager
 		}
 
 		// Check privileges
-		if (! Menu::userCanManageAssets()) {
+		if (! Menu::userCanAccessAssetCleanUp()) {
 			echo 'Error: Not enough privileges to perform this action.';
 			exit();
 		}

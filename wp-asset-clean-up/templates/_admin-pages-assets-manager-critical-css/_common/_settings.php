@@ -2,7 +2,8 @@
 /*
  * No direct access to this file
  */
-use WpAssetCleanUp\OptimiseAssets\CriticalCssAdmin;
+
+use WpAssetCleanUp\Admin\CriticalCssAdmin;
 
 if (! isset($data, $locationKey, $criticalCssConfig)) {
 	exit;

@@ -3,7 +3,7 @@
  * No direct access to this file
  */
 
-use WpAssetCleanUp\Overview;
+use WpAssetCleanUp\Admin\Overview;
 
 if (! isset($data)) {
 	exit;

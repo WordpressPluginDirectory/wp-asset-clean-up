@@ -1,5 +1,5 @@
 <?php
-use WpAssetCleanUp\SettingsAdmin;
+use WpAssetCleanUp\Admin\SettingsAdmin;
 
 if (! isset($data)) {
     exit;
@@ -26,7 +26,7 @@ $optionsAlreadySet = ! empty($data['do_not_load_plugin_features']);
 </fieldset>
 
 <fieldset class="wpacu-options-grouped-in-settings">
-    <legend>Prevent features of <?php echo WPACU_PLUGIN_TITLE; ?> from triggering on specific pages</legend>
+    <legend>Prevent features of <?php echo WPACU_PLUGIN_TITLE; ?> from triggering on certain pages</legend>
     <p style="margin-top: 5px;">Sometimes, specific features that you have enabled might not work well on certain pages (or group of pages). For instance, on most pages, the feature to combine CSS would work fine, but you noticed that on a page and its subpages (e.g. /course/, /course/title-here/), this feature doesn't work so well. You have the option to prevent it from triggering (in this example, it would keep the files loading individually, not combined).</p>
 
     <div class="wpacu-warning">

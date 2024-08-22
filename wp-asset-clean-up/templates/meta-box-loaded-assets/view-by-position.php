@@ -1,6 +1,6 @@
 <?php
 // no direct access
-use WpAssetCleanUp\MiscAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
 
 if (! isset($data)) {
 	exit;
@@ -37,17 +37,20 @@ if (! empty($data['all']['styles']) || ! empty($data['all']['scripts'])) {
         }
 
         foreach ($rowsAssets as $positionMain => $values) {
-            ksort($values);
+            $values = \WpAssetCleanUp\Admin\Sorting::sortAreaAssetRowsValues($values);
 
             $assetRowsOutput = '';
 
             $totalFiles    = 0;
             $assetRowIndex = 1;
 
-            foreach ($values as $assetType => $assetRows) {
+            foreach ($values as $assetRows) {
                 foreach ($assetRows as $assetRow) {
                     $assetRowsOutput .= $assetRow . "\n";
-                    $totalFiles++;
+
+                    if (strpos($assetRow, 'wpacu_this_asset_row_area_is_hidden') === false) {
+                        $totalFiles++;
+                    }
                 }
             }
             ?>

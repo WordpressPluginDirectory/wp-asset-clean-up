@@ -16,7 +16,7 @@ if ( ! defined('FS_CHMOD_FILE') ) {
 }
 
 if ( ! defined('WPACU_PLUGIN_TITLE') ) {
-	define( 'WPACU_PLUGIN_TITLE', 'Asset CleanUp' ); // a short version of the plugin name
+    define('WPACU_PLUGIN_TITLE', 'Asset CleanUp'); // a short version of the plugin name
 }
 
 if ( isset($_GET['wpacu_clean_load']) && ! is_admin() ) {
@@ -552,6 +552,9 @@ if ( ! function_exists( 'wpacuIsHomePageUrl') ) {
             // "User Switching" plugin
             'user_switched',
             'switched_back',
+
+            // Nextend Social Login and Register
+            'nsl_bypass_cache',
 
             // Asset CleanUp's ones (e.g. after the form from the CSS/JS manager is submitted, within the front-end view, at the bottom of the page)
 
@@ -1197,7 +1200,14 @@ if ( ! function_exists('assetCleanUpNoLoad') ) {
 		// [wpacu_lite]
 		// There's no point in loading the plugin on a REST API call
 		// This is valid for the Lite version as the Pro version could work differently  / read more: https://www.assetcleanup.com/docs/?p=1469
-		if (assetCleanUpIsRestCall()) {
+
+        // Make exception and leave the oEmbed in case the feature is disabled
+        // In "Settings" -- "Site-Wide Common Unloads" -- "Disable oEmbed (Embeds) Site-Wide"
+        // Some functions has to be processed
+        $restUrlPrefix = function_exists( 'rest_get_url_prefix' ) ? rest_get_url_prefix() : 'wp-json';
+        $isOembedRequest = strpos($_SERVER['REQUEST_URI'], '/' . $restUrlPrefix . '/oembed/') !== false;
+
+		if ( ! $isOembedRequest && assetCleanUpIsRestCall() ) {
 			define( 'WPACU_NO_LOAD_SET', true );
 
 			return true;
@@ -1317,7 +1327,7 @@ if ( ! function_exists('assetCleanUpNoLoad') ) {
 			// Only use exit() when "wpassetcleanup_load" is used
 			if ( isset( $_REQUEST['wpassetcleanup_load'] ) && $_REQUEST['wpassetcleanup_load'] ) {
 				add_action( 'registered_taxonomy', function() use ($wpacuNoLoadMatchesStatus) {
-					if ( current_user_can( 'administrator' ) ) {
+					if ( current_user_can( 'administrator' ) || current_user_can( 'assetcleanup_manager' ) ) {
 						if ( $wpacuNoLoadMatchesStatus === 'is_set_in_settings' ) {
 							$msg = sprintf(
 								__( 'This page\'s URL is matched by one of the RegEx rules you have in <em>"Settings"</em> -&gt; <em>"Plugin Usage Preferences"</em> -&gt; <em>"Do not load the plugin on certain pages"</em>, thus %s is not loaded on that page and no CSS/JS are to be managed. If you wish to view the CSS/JS manager, please remove the matching RegEx rule and the list of CSS/JS will be fetched.',
@@ -1373,32 +1383,3 @@ if ( ! function_exists('wpacuIsPluginActive') ) {
         return false;
     }
 }
-
-// Make sure the plugin doesn't load when the editor of either "X" theme or "Pro" website creator (theme.co) is ON
-add_action('init', static function() {
-	if (is_admin()) {
-		return; // Not relevant for the Dashboard view, stop here!
-	}
-
-    if ( ! is_super_admin() ) {
-        return; // Not relevant if the logged-in user does not have full rights
-    }
-
-	if (class_exists('\WpAssetCleanUp\Menu') && \WpAssetCleanUp\Menu::userCanManageAssets() && method_exists('Cornerstone_Common', 'get_app_slug') && in_array(get_stylesheet(), array('x', 'pro'))) {
-		$customAppSlug = get_stylesheet(); // default one ('x' or 'pro')
-
-		// Is there any custom slug set in "/wp-admin/admin.php?page=cornerstone-settings"?
-		// "Settings" -> "Custom Path" (check it out below)
-		$cornerStoneSettings = get_option('cornerstone_settings');
-		if (isset($cornerStoneSettings['custom_app_slug']) && $cornerStoneSettings['custom_app_slug'] !== '') {
-			$customAppSlug = $cornerStoneSettings['custom_app_slug'];
-		}
-
-		$lengthToUse = strlen($customAppSlug) + 2; // add the slashes to the count
-
-		if (substr($_SERVER['REQUEST_URI'], -$lengthToUse) === '/'.$customAppSlug.'/') {
-			add_filter( 'wpacu_prevent_any_frontend_optimization', '__return_true' );
-		}
-	}
-});
-

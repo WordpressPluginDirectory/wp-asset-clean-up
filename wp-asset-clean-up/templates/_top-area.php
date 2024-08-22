@@ -6,9 +6,9 @@ if (! isset($data)) {
 	exit;
 }
 
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\Main;
 use WpAssetCleanUp\Misc;
-use WpAssetCleanUp\MiscAdmin;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 $wpacuTopAreaLinks = array(

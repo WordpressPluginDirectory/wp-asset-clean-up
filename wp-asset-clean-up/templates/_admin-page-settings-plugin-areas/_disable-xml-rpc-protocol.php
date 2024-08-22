@@ -2,12 +2,12 @@
 /*
  * No direct access to this file
  */
-if (! isset($data, $selectedTabArea)) {
+if (! isset($data)) {
 	exit;
 }
 
 $tabIdArea = 'wpacu-setting-disable-xml-rpc';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
 ?>
 <div id="<?php echo esc_attr($tabIdArea); ?>" class="wpacu-settings-tab-content" <?php echo wp_kses($styleTabContent, array('style' => array())); ?>>
 	<h2 class="wpacu-settings-area-title"><?php _e('Disable XML-RPC Protocol Support partially or completely', 'wp-asset-clean-up'); ?></h2>

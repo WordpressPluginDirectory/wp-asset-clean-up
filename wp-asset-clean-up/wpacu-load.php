@@ -43,7 +43,7 @@ if (isset($GLOBALS['wpacu_object_cache'])) {
 \WpAssetCleanUp\Main::instance()->loadAllSettings();
 
 if (is_admin()) {
-    \WpAssetCleanUp\MainAdmin::instance();
+    \WpAssetCleanUp\Admin\MainAdmin::instance();
 } else {
     // Situations when methods from MainAdmin are needed in the front-end view
     // e.g. when "wp_assetcleanup_load=1" is used or when the admin manages the assets in the front-end view (bottom of the page)
@@ -51,7 +51,7 @@ if (is_admin()) {
         $isFrontEndEditView  = \WpAssetCleanUp\Main::instance()->isFrontendEditView;
 
         if ( $isFrontEndEditView || \WpAssetCleanUp\Main::instance()->isGetAssetsCall ) {
-            \WpAssetCleanUp\MainAdmin::instance();
+            \WpAssetCleanUp\Admin\MainAdmin::instance();
         }
     });
 }
@@ -62,7 +62,7 @@ if ( ! is_admin() ) {
 
 // Menu
 add_action('init', function() {
-    if (is_admin() || is_super_admin()) {
+    if (is_admin()) {
         new \WpAssetCleanUp\Menu;
     }
 });
@@ -70,17 +70,16 @@ add_action('init', function() {
 $wpacuSettingsClass = new \WpAssetCleanUp\Settings();
 
 if (is_admin()) {
-    $wpacuSettingsAdminClass = new \WpAssetCleanUp\SettingsAdmin();
+    $wpacuSettingsAdminClass = new \WpAssetCleanUp\Admin\SettingsAdmin();
     $wpacuSettingsAdminClass->init();
+
+    $wpacuSettingsAdminOnlyForAdminClass = new \WpAssetCleanUp\Admin\SettingsAdminOnlyForAdmin();
+    $wpacuSettingsAdminOnlyForAdminClass->init();
 }
 
 // The following are only relevant when you're logged in
 add_action('init', function() {
-    if ( ! is_super_admin() ) {
-        return;
-    }
-
-	if (\WpAssetCleanUp\Menu::userCanManageAssets('skip_is_super_admin')) {
+	if (\WpAssetCleanUp\Menu::userCanAccessAssetCleanUp()) {
 		\WpAssetCleanUp\AssetsManager::instance();
 
         $withinAdminAreaOrFrontendWithCssJsManagerOrClearCache = is_admin() ||
@@ -97,7 +96,7 @@ add_action('init', function() {
             // Relevant for the admin area or when the admin is using the CSS/JS manager in the front-end
             if (is_admin() || \WpAssetCleanUp\AssetsManager::instance()->frontendShow()) {
                 // Initialize information (irrelevant for the guest visitor)
-                new \WpAssetCleanUp\Info();
+                new \WpAssetCleanUp\Admin\Info();
             }
 		}
 	}
@@ -108,7 +107,7 @@ if ( ! is_admin() ) {
 		$wpacuSettings = $wpacuSettingsClass->getAll();
 
 		// If "Manage in the front-end" is enabled & the admin is logged-in, do not trigger any Autoptimize caching at all
-		if ( $wpacuSettings['frontend_show'] && ! defined( 'AUTOPTIMIZE_NOBUFFER_OPTIMIZE' ) && \WpAssetCleanUp\Menu::userCanManageAssets() ) {
+		if ( $wpacuSettings['frontend_show'] && ! defined( 'AUTOPTIMIZE_NOBUFFER_OPTIMIZE' ) && \WpAssetCleanUp\Menu::userCanAccessAssetCleanUp() ) {
 			define( 'AUTOPTIMIZE_NOBUFFER_OPTIMIZE', true );
 		}
 	}, - PHP_INT_MAX );
@@ -118,8 +117,8 @@ if ( ! is_admin() ) {
 add_action('init', function() {
 	if ( ( ! \WpAssetCleanUp\Main::instance()->settings['hide_from_admin_bar'] ) &&
 		 is_admin_bar_showing() &&
-         (is_super_admin() || \WpAssetCleanUp\Menu::userCanManageAssets()) ) {
-		new \WpAssetCleanUp\AdminBar();
+         \WpAssetCleanUp\Menu::userCanAccessAssetCleanUp() ) {
+		new WpAssetCleanUp\AdminBar();
 	}
 });
 
@@ -145,22 +144,22 @@ if (is_admin()) {
 	/*
 	 * Trigger only within the Dashboard view (e.g., within /wp-admin/)
 	 */
-	$wpacuPlugin = new \WpAssetCleanUp\Plugin;
+	$wpacuPlugin = new \WpAssetCleanUp\Admin\Plugin;
 	$wpacuPlugin->init();
 
-	new \WpAssetCleanUp\PluginReview();
+	new \WpAssetCleanUp\Admin\PluginReview();
 
 	$wpacuPluginTracking = new \WpAssetCleanUp\PluginTracking();
 	$wpacuPluginTracking->init();
 
-	$wpacuTools = new \WpAssetCleanUp\Tools();
+	$wpacuTools = new \WpAssetCleanUp\Admin\Tools();
 	$wpacuTools->init();
 
-	new \WpAssetCleanUp\AjaxSearchAutocomplete();
+	new \WpAssetCleanUp\Admin\AjaxSearchPagesAutocomplete();
 
     \WpAssetCleanUp\Preloads::instance()->initAdmin();
 
-    new \WpAssetCleanUp\OptimiseAssets\CriticalCssAdmin();
+    new \WpAssetCleanUp\Admin\CriticalCssAdmin();
 } elseif ($wpacuOptimizeCommon::triggerFrontendOptimization()) {
 	/*
 	 * Trigger the CSS & JS combination only in the front-end view in certain conditions (not within the Dashboard)

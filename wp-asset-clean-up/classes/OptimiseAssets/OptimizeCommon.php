@@ -3,19 +3,19 @@
 
 namespace WpAssetCleanUp\OptimiseAssets;
 
+use WpAssetCleanUp\Admin\MainAdmin;
+use WpAssetCleanUp\Admin\MiscAdmin;
+use WpAssetCleanUp\Admin\Plugin;
+use WpAssetCleanUp\Admin\Tools;
 use WpAssetCleanUp\CleanUp;
 use WpAssetCleanUp\Debug;
 use WpAssetCleanUp\FileSystem;
 use WpAssetCleanUp\Main;
-use WpAssetCleanUp\MainAdmin;
 use WpAssetCleanUp\MainFront;
 use WpAssetCleanUp\Menu;
 use WpAssetCleanUp\MetaBoxes;
 use WpAssetCleanUp\Misc;
-use WpAssetCleanUp\MiscAdmin;
-use WpAssetCleanUp\Plugin;
 use WpAssetCleanUp\Settings;
-use WpAssetCleanUp\Tools;
 
 /**
  * Class OptimizeCommon
@@ -63,7 +63,7 @@ class OptimizeCommon
 		if ( isset($_GET['action']) && $_GET['action'] === 'purge_cache' ) {
 			// Leave its default parameters, no redirect needed
 			add_action('init', static function() {
-                if ( ! Menu::userCanManageAssets() ) {
+                if ( ! Menu::userCanAccessAssetCleanUp() ) {
                     return; // in this case, only the admin can clear the cache
                 }
 
@@ -97,7 +97,7 @@ class OptimizeCommon
 		// Keep used resources to the minimum and trigger any clearing of the page's CSS/JS caching
 		// for the admin while he has the right privileges and a single "post" page is visited
 		add_action('wp', static function() {
-			if (! is_admin() && is_super_admin() && Menu::userCanManageAssets('skip_is_super_admin') && MainFront::isSingularPage()) {
+			if ( ! is_admin() && Menu::userCanAccessAssetCleanUp() && MainFront::isSingularPage() ) {
 				global $post;
 
 				if (isset($post->ID) && $post->ID) {
@@ -347,7 +347,7 @@ class OptimizeCommon
             return $GLOBALS['wpacu_optimize_css_is_worth_checking_for_optimization'];
         }
 
-        $userCanManageAssets = is_user_logged_in() && (is_super_admin() || Menu::userCanManageAssets('skip_is_super_admin'));
+        $userCanManageAssets = Menu::userCanAccessAssetCleanUp();
 
         if (isset($_GET['wpacu_css_minify']) && $userCanManageAssets) {
             $isMinifyCssEnabled = true;
@@ -381,7 +381,7 @@ class OptimizeCommon
             return $GLOBALS['wpacu_optimize_js_is_worth_checking_for_optimization'];
         }
 
-        $userCanManageAssets = is_user_logged_in() && (is_super_admin() || Menu::userCanManageAssets('skip_is_super_admin'));
+        $userCanManageAssets = Menu::userCanAccessAssetCleanUp();
 
         if (isset($_GET['wpacu_js_minify']) && $userCanManageAssets) {
             $isMinifyJsEnabled = true;
@@ -450,7 +450,7 @@ class OptimizeCommon
 		 * */
 		ob_start(static function($htmlSource) {
 			// Do not do any optimization if "Test Mode" is Enabled
-			if (! Menu::userCanManageAssets() && Main::instance()->settings['test_mode']) {
+			if ( ! Menu::userCanAccessAssetCleanUp() && Main::instance()->settings['test_mode']) {
 				return $htmlSource;
 			}
 

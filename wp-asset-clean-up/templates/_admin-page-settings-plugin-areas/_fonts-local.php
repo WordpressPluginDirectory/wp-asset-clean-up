@@ -5,12 +5,12 @@
 
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
-if (! isset($data, $selectedTabArea)) {
+if (! isset($data)) {
 	exit;
 }
 
 $tabIdArea = 'wpacu-setting-local-fonts';
-$styleTabContent = ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
+$styleTabContent = isset($selectedTabArea) && ($selectedTabArea === $tabIdArea) ? 'style="display: table-cell;"' : '';
 
 $ddOptions = array(
 	'swap'     => 'swap (most used)',

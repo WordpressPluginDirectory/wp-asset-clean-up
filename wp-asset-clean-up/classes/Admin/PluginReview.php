@@ -1,7 +1,11 @@
 <?php
 /** @noinspection MultipleReturnStatementsInspection */
 
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
+
+use WpAssetCleanUp\Menu;
+use WpAssetCleanUp\Misc;
+use WpAssetCleanUp\Settings;
 
 /**
  * Class PluginReview
@@ -184,7 +188,7 @@ class PluginReview
 	 */
 	public function showReviewNotice()
     {
-        if ( ! Menu::userCanManageAssets() ) {
+        if ( ! Menu::userCanAccessAssetCleanUp() ) {
             // Show the review notice only to people that can access the plugin's settings
             return false;
         }
@@ -281,7 +285,7 @@ class PluginReview
 	 */
 	public function doCloseNotice()
     {
-        if ( ! Menu::userCanManageAssets() ) {
+        if ( ! Menu::userCanAccessAssetCleanUp() ) {
             echo 'Error: You do not have permission to perform this action.';
             exit();
         }

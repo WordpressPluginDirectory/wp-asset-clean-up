@@ -160,7 +160,7 @@ HTML;
 	</tr>
 	<tr valign="top">
 		<th scope="row" class="setting_title">
-			<?php _e('Preconnect?', 'wp-asset-clean-up'); ?>
+			<label for="wpacu_google_fonts_preconnect"><?php _e('Preconnect?', 'wp-asset-clean-up'); ?></label>
 			<p class="wpacu_subtitle"><small><em><?php _e('Don\'t let the browser wait until it sees the CSS call font files before it begins DNS/TCP/TLS', 'wp-asset-clean-up'); ?></em></small></p>
 		</th>
 		<td>

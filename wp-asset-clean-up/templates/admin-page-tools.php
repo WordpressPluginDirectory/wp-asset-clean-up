@@ -6,8 +6,8 @@ if (! isset($data)) {
 	exit;
 }
 
+use WpAssetCleanUp\Admin\MiscAdmin;
 use WpAssetCleanUp\Misc;
-use WpAssetCleanUp\MiscAdmin;
 use WpAssetCleanUp\OptimiseAssets\OptimizeCommon;
 
 include_once __DIR__ . '/_top-area.php';

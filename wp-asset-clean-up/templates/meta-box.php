@@ -3,7 +3,7 @@
  * No direct access to this file
  */
 
-use WpAssetCleanUp\MainAdmin;
+use WpAssetCleanUp\Admin\MainAdmin;
 use WpAssetCleanUp\MetaBoxes;
 
 if (! isset($data)) {

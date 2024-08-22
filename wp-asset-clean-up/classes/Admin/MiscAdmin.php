@@ -1,7 +1,10 @@
 <?php
 /** @noinspection MultipleReturnStatementsInspection */
 
-namespace WpAssetCleanUp;
+namespace WpAssetCleanUp\Admin;
+
+use WpAssetCleanUp\MetaBoxes;
+use WpAssetCleanUp\Misc;
 
 /**
  * Class MiscAdmin

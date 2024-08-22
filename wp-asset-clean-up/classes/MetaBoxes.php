@@ -3,6 +3,8 @@
 
 namespace WpAssetCleanUp;
 
+use WpAssetCleanUp\Admin\MainAdmin;
+
 /**
  * Class MetaBoxes
  * @package WpAssetCleanUp
@@ -40,7 +42,7 @@ class MetaBoxes
 	 */
 	public function initMetaBox($type)
 	{
-		if ( ! Menu::userCanManageAssets() ) {
+		if ( ! Menu::userCanAccessAssetCleanUp() ) {
 			return;
 		}
 
