@@ -4,7 +4,7 @@ Tags: minify css, minify javascript, defer css javascript, page speed, dequeue
 Donate link: https://www.gabelivan.com/items/wp-asset-cleanup-pro/?utm_source=wp_org_lite&utm_medium=donate
 Requires at least: 4.6
 Tested up to: 6.6.1
-Stable tag: 1.3.9.6
+Stable tag: 1.3.9.7
 Requires PHP: 5.6
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl.html
@@ -192,6 +192,12 @@ With the recently released "Test Mode" feature, you can safely unload assets on 
 4. Homepage CSS & JS Management (List sorted by location)
 
 == Changelog ==
+= 1.3.9.7 =
+* CSS assets can now be preloaded (via the CSS/JS manager) in an async way as well * <a target="_blank" href="https://www.assetcleanup.com/docs/?p=202#preload-async-css">Read more</a>
+* Reduce the total number of SQL queries used to obtain information
+* Stop triggering PHP code and SQL queries on pages where they are not relevant
+* Cache SQL queries that are time consuming, which is ideal for websites with a very large database (e.g. tens / hundred of thousands of users)
+
 = 1.3.9.6 =
 * Fix: The "usermeta" table is populated with duplicate entries, leading to a larger database, and sometimes, leading to a high CPU usage
 

@@ -32,12 +32,10 @@ class SettingsAdminOnlyForAdmin
      */
     public function init()
     {
-        if (self::useAutoCompleteSearchForNonAdminUsersDd()) {
-            // "Settings" -- "Plugin Usage Preferences" -- "Plugin Access" -- "Give access for specific non-administrator users"
-            // This is relevant for large number of users
-            add_action('wp_ajax_' . WPACU_PLUGIN_ID . '_search_non_admin_users_for_dd',      array($this, 'ajaxSearchNonAdminUsersForDd'));
-            add_action('wp_ajax_' . WPACU_PLUGIN_ID . '_add_non_admin_users_to_chosen_list', array($this, 'ajaxAddNonAdminUsersToChosenList'));
-        }
+        // "Settings" -- "Plugin Usage Preferences" -- "Plugin Access" -- "Give access for specific non-administrator users"
+        // This is relevant for large number of users
+        add_action('wp_ajax_' . WPACU_PLUGIN_ID . '_search_non_admin_users_for_dd',      array($this, 'ajaxSearchNonAdminUsersForDd'));
+        add_action('wp_ajax_' . WPACU_PLUGIN_ID . '_add_non_admin_users_to_chosen_list', array($this, 'ajaxAddNonAdminUsersToChosenList'));
     }
 
     /**
@@ -54,7 +52,7 @@ class SettingsAdminOnlyForAdmin
         // This is considered a special setting as the values are saved in the plugin's settings, but the drop-down is populated dynamically also from users table
         // The values are stored via add_cap() and removed via remove_cap() and this can be done via 3rd party plugins as well
         // The verification is made via current_user_can('capability_name_here');
-        // This action should be taken when the admin submits the actual "Settings" form
+        // This action should be taken when ONLY the admin (e.g. not a "subscriber" powered to access the plugin area) submits the actual "Settings" form
         // This is because the list is cleared if there are no records, and this should happen only in "Settings" area
 
         // [START] Allow managing assets
@@ -314,31 +312,28 @@ SQL;
      */
     public static function getTotalNonAdminUsers()
     {
-        $cacheKey = 'wpacu_total_non_admin_users';
+        // Slow query for websites with lots of websites
+        // Cache for the result for one day (it won't affect the functionality of the plugin)
+        $transientKeyCache = WPACU_PLUGIN_ID.'_total_non_admin_users';
 
-        if (ObjectCache::wpacu_cache_get($cacheKey) !== false) {
-            return ObjectCache::wpacu_cache_get($cacheKey);
+        $totalNonAdminUsers = get_transient($transientKeyCache);
+
+        if ( $totalNonAdminUsers !== false ) {
+            return (int)$totalNonAdminUsers;
         }
 
         global $wpdb;
 
-        $totalWpUsersQuery = <<<SQL
-SELECT COUNT(ID) FROM `{$wpdb->users}`
-SQL;
-        $totalUsers = (int)$wpdb->get_var($totalWpUsersQuery);
-
         $defaultAccessRole = Menu::$defaultAccessRole;
 
-        $totalAdminUsersQuery = <<<SQL
+        $totalNonAdminUsersQuery = <<<SQL
 SELECT COUNT(ID) FROM `{$wpdb->users}` u
 LEFT JOIN `{$wpdb->usermeta}` um ON (u.ID = um.user_id)
-WHERE um.meta_key='{$wpdb->prefix}capabilities' AND um.meta_value LIKE '%"{$defaultAccessRole}"%';
+WHERE um.meta_key='{$wpdb->prefix}capabilities' AND um.meta_value NOT LIKE '%"{$defaultAccessRole}"%';
 SQL;
-        $totalAdminUsers = (int)$wpdb->get_var($totalAdminUsersQuery);
+        $totalNonAdminUsers      = (int)$wpdb->get_var($totalNonAdminUsersQuery);
 
-        $totalNonAdminUsers = $totalUsers - $totalAdminUsers;
-
-        ObjectCache::wpacu_cache_set($cacheKey, $totalNonAdminUsers);
+        set_transient($transientKeyCache, $totalNonAdminUsers, 60 * 60 * 24);
 
         return $totalNonAdminUsers;
     }
@@ -367,21 +362,37 @@ SQL;
     }
 
     /**
+     *
      * e.g. "Settings" -- "Plugin Usage Preferences" -- "Plugin Access" -- "Give access for specific non-administrator users"
      *
      * @return array
      */
     public static function getSpecificNonAdminUsersWithPluginAccessCap()
     {
-        $argsAllUsers = array(
-            'role'         => \WpAssetCleanUp\Menu::$pluginAccessCap,
-            'role__not_in' => 'administrator',
-            'orderby'      => 'user_nicename',
-            'order'        => 'ASC',
-            'number'       => -1
-        );
+        // Run a low-consuming query first; It makes a difference in websites with lots of users
+        global $wpdb;
 
-        return get_users( $argsAllUsers );
+        $pluginAccessCap = Menu::$pluginAccessCap;
+
+        $sqlQuery = <<<SQL
+SELECT umeta_id FROM `{$wpdb->usermeta}` WHERE `meta_key`='{$wpdb->prefix}capabilities' AND `meta_value` LIKE '%"{$pluginAccessCap}"%' LIMIT 1
+SQL;
+        $anyUserWithPluginAccessCap = $wpdb->get_var($sqlQuery);
+
+        if ($anyUserWithPluginAccessCap) {
+            // Finally, trigger the main query (more resources are used)
+            $argsAllUsers = array(
+                'role'         => \WpAssetCleanUp\Menu::$pluginAccessCap,
+                'role__not_in' => 'administrator',
+                'orderby'      => 'user_nicename',
+                'order'        => 'ASC',
+                'number'       => -1
+            );
+
+            return get_users($argsAllUsers);
+        }
+
+        return array(); // default
     }
 
     /**
@@ -419,30 +430,33 @@ SQL;
      *
      * @return array
      */
-    public static function getAnySpecifiedAdminsForAccessToAssetsManager($data = array())
+    public static function filterAnySpecifiedAdminsForAccessToAssetsManager($data = array())
     {
+        if ( isset($data['allow_manage_assets_to']) && $data['allow_manage_assets_to'] === 'any_admin' ) {
+            return $data;
+        }
+
         $metaKeyTargeted = WPACU_PLUGIN_ID . '_user_chosen_for_access_to_assets_manager';
 
-        // [START] Old plugin version transition
-        // First move it, if an old version of the plugin is used
+        // [Old plugin version fallback]
         if ( isset($data['allow_manage_assets_to'], $data['allow_manage_assets_to_list'])
              && $data['allow_manage_assets_to'] === 'chosen'
-             && ! empty($data['allow_manage_assets_to_list']) ) {
+             && ! empty($data['allow_manage_assets_to_list']) && ! self::checkForAnyMetaKeyForAllowManageAssets($metaKeyTargeted) ) {
             $data['allow_manage_assets_to_list'] = array_unique($data['allow_manage_assets_to_list']);
 
             foreach ($data['allow_manage_assets_to_list'] as $specificUserId) {
                 $user = get_user_by('id', $specificUserId);
+
                 if ( ! isset($user->ID) ) {
                     $userIdNotActive = array_search($specificUserId, $data['allow_manage_assets_to_list']);
                     unset($data['allow_manage_assets_to_list'][$userIdNotActive]);
                     continue;
                 }
 
-                delete_user_meta($specificUserId, $metaKeyTargeted);
-                add_user_meta($specificUserId, $metaKeyTargeted, 1);
+                update_user_meta($specificUserId, $metaKeyTargeted, 1);
             }
 
-            if ( ! empty($data['allow_manage_assets_to_list']) ) {
+            if ( empty($data['allow_manage_assets_to_list']) ) {
                 // In case the chosen user(s) are not there anymore (the ID is in the settings, but the user was removed from WordPress)
                 $data['allow_manage_assets_to']      = 'any_admin';
                 $data['allow_manage_assets_to_list'] = array();
@@ -450,16 +464,24 @@ SQL;
 
             return $data;
         }
-        // [END] Old plugin version transition
+        // [/Old plugin version fallback]
 
         // Refill the values for $data['allow_manage_assets_to'] and $data['allow_manage_assets_to_list']
         // In order to use the same code as before in [...]/templates/_admin-page-settings-plugin-areas/_plugin-usage-settings/_assets-management.php
         global $wpdb;
 
-        $query = <<<SQL
+        $objectCacheKey = 'wpacu_allow_manage_assets_to_list';
+
+        $userIds = ObjectCache::wpacu_cache_get($objectCacheKey);
+
+        if ($userIds === false) {
+            $query   = <<<SQL
 SELECT `user_id` FROM `{$wpdb->usermeta}` WHERE `meta_key`='{$metaKeyTargeted}'
 SQL;
-        $userIds = $wpdb->get_col($query);
+            $userIds = $wpdb->get_col($query);
+
+            ObjectCache::wpacu_cache_set($objectCacheKey, $userIds);
+        }
 
         if ( ! empty($userIds) ) {
             $data['allow_manage_assets_to']      = 'chosen';
@@ -473,15 +495,51 @@ SQL;
     }
 
     /**
+     * @param string $metaKeyTargeted
+     *
+     * @return string|null
+     */
+    public static function checkForAnyMetaKeyForAllowManageAssets($metaKeyTargeted)
+    {
+        global $wpdb;
+
+        $objectCacheKey = 'wpacu_check_for_any_meta_key_for_allow_manage_assets';
+
+        $result = ObjectCache::wpacu_cache_get($objectCacheKey);
+
+        if ($result !== false) {
+            return $result;
+        }
+
+        $sqlQuery = <<<SQL
+SELECT `user_id` FROM `{$wpdb->usermeta}` WHERE `meta_key`='{$metaKeyTargeted}' LIMIT 1
+SQL;
+        $result = $wpdb->get_var($sqlQuery);
+
+        ObjectCache::wpacu_cache_set($objectCacheKey, $result);
+
+        return $result;
+    }
+
+    /**
      * e.g. "Settings" -- "Plugin Usage Preferences" -- "Plugin Access" -- "Give access for specific non-administrator users"
      *
      * @return array
      */
     public static function getSpecificNonAdminUsersIdsWithPluginAccessCap()
     {
+        $objectCacheKey = 'wpacu_specific_non_admin_users_with_plugin_access_cap';
+
+        $usersWithCapIds = ObjectCache::wpacu_cache_get($objectCacheKey);
+
+        if ($usersWithCapIds !== false) {
+            return $usersWithCapIds;
+        }
+
         $specificUsersWithCap = self::getSpecificNonAdminUsersWithPluginAccessCap();
 
         if (empty($specificUsersWithCap)) {
+            ObjectCache::wpacu_cache_set($objectCacheKey, array());
             return array();
         }
 
@@ -490,6 +548,8 @@ SQL;
         foreach ($specificUsersWithCap as $specificUserWithCap) {
             $usersWithCapIds[] = $specificUserWithCap->ID;
         }
+
+        ObjectCache::wpacu_cache_set($objectCacheKey, $usersWithCapIds);
 
         return $usersWithCapIds;
     }

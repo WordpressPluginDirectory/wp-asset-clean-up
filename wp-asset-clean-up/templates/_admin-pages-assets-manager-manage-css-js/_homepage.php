@@ -139,7 +139,9 @@ if ($data['show_on_front'] === 'page' && $data['page_on_front']) {
         wp_nonce_field($data['nonce_action'], $data['nonce_name']);
         ?>
         <div id="wpacu-update-button-area" class="no-left-margin">
-            <p class="submit"><input type="submit" name="submit" id="submit" <?php if ($wpacuNoLoadInTargetPage) { echo 'style="display: inline-block;"'; } ?> class="hidden button button-primary" value="<?php esc_attr_e('Update', 'wp-asset-clean-up'); ?>"></p>
+            <p class="submit">
+                <input type="submit" name="submit" class="button button-primary <?php if ( ! $wpacuNoLoadInTargetPage ) { ?> hidden <?php } ?>" value="<?php esc_attr_e('Update', 'wp-asset-clean-up'); ?>">
+            </p>
             <div id="wpacu-updating-settings" style="margin-left: 100px;">
                 <img src="<?php echo esc_url(admin_url('images/spinner.gif')); ?>" align="top" width="20" height="20" alt="" />
             </div>

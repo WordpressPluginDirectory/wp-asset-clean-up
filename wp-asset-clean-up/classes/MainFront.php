@@ -677,10 +677,6 @@ class MainFront
 	{
 		/* [wpacu_timing] */ Misc::scriptExecTimer( 'filter_dequeue_styles' );/* [/wpacu_timing] */
 
-		if (is_admin()) {
-			return;
-		}
-
 		global $wp_styles;
 
 		if (current_action() === 'wp_print_styles') {
@@ -923,10 +919,6 @@ class MainFront
 	public function filterScripts()
 	{
 		/* [wpacu_timing] */ Misc::scriptExecTimer( 'filter_dequeue_scripts' );/* [/wpacu_timing] */
-
-		if (is_admin()) {
-			return;
-		}
 
 		global $wp_scripts;
 

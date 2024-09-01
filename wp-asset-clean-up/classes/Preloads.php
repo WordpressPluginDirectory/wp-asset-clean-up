@@ -49,26 +49,50 @@ class Preloads
 	 */
 	public function initFront()
 	{
-        if ( self::preventPreload() ) {
-            return;
-        }
-
         self::instance()->preloads = $this->getPreloads();
 
         add_filter('wpfc_buffer_callback_filter', static function ($buffer) {
-            return str_replace('rel=\'preload\' data-from-rel=\'stylesheet\'', 'rel=\'preload\'', $buffer);
+            $buffer = str_replace('rel=\'preload\' data-from-rel=\'stylesheet\'', 'rel=\'preload\'', $buffer);
+
+            return $buffer;
         });
 
-        add_action('init', function() {
-            // Conditions: Outside the admin area; Not in fetching the asset list mode
-            // Front-end optimization is triggered; not in "Test Mode" (with a non-admin visitor)
-            $triggerIf = ( ! is_admin() && ! ( (WPACU_GET_LOADED_ASSETS_ACTION === true) || OptimizeCommon::preventAnyFrontendOptimization() || self::preventPreload() ) );
-
-            if ( $triggerIf ) {
-                add_filter('style_loader_tag', array($this, 'preloadCss'), 11, 2);
-                add_filter('script_loader_tag', array($this, 'preloadJs'), 11, 2);
+        add_action('init', function () {
+            if ( ! Preloads::triggerPreload() ) {
+                return;
             }
+
+            add_filter('style_loader_tag',  array($this, 'preloadCss'), 11, 2);
+            add_filter('script_loader_tag', array($this, 'preloadJs'),  11, 2);
         });
+
+        add_action('wp_head', static function () {
+            if ( ! Preloads::triggerPreload() ) {
+                return;
+            }
+
+            // Debugging? /?wpacu_preload_css_async -> print it
+            if (isset($_GET['wpacu_preload_css_async']) && $_GET['wpacu_preload_css_async']) {
+                echo Misc::preloadAsyncCssFallbackOutput();
+
+                return;
+            }
+
+            if (wpacuIsDefinedConstant('WPACU_NO_ASSETS_PRELOADED')) {
+                return; // No assets are preloaded (early detection)
+            }
+
+            if (wpacuIsDefinedConstant('WPACU_PRELOAD_ASYNC_SCRIPT_SHOWN')) {
+                return; // already printed
+            }
+
+            // Check if there's anything preloaded with Async? If yes, print it
+            $preloads = Preloads::instance()->getPreloads();
+
+            if (isset($preloads['styles']) && in_array('async', $preloads['styles'])) {
+                echo Misc::preloadAsyncCssFallbackOutput();
+            }
+        }, PHP_INT_MAX);
 	}
 
     /**
@@ -228,6 +252,11 @@ class Preloads
 			self::instance()->preloads['styles'][$wpacuAsyncPreloadHandle] = 'basic';
 		}
 
+		if ($wpacuAsyncPreloadHandle = Misc::getVar('get', 'wpacu_preload_css_async')) {
+		    // For testing purposes: Check how the page loads with the requested CSS preloaded & loaded asynchronously
+		    self::instance()->preloads['styles'][$wpacuAsyncPreloadHandle] = 'async';
+        }
+
 		// Only valid for front-end pages with LINKs
 		if (! $this->enablePreloads('css') || strpos($htmlTag,'<link ') === false || Main::instance()->preventAssetsSettings()) {
 			/* [wpacu_timing] */Misc::scriptExecTimer( $wpacuTimingName, 'end' );/* [/wpacu_timing] */
@@ -241,8 +270,23 @@ class Preloads
 
 		if ( ! empty(self::instance()->preloads['styles'][$handle]) ) {
             if (isset($_REQUEST['wpacu_no_css_preload_basic'])) { // do not apply it for debugging purposes
+                /* [wpacu_timing] */Misc::scriptExecTimer( $wpacuTimingName, 'end' );/* [/wpacu_timing] */
+                return str_replace('<link ', '<link data-wpacu-skip-preload=\'1\' ', $htmlTag);
+            }
+
+            if (self::instance()->preloads['styles'][$handle] === 'async') {
+	            if (isset($_REQUEST['wpacu_no_css_preload_async'])) { // do not apply it for debugging purposes
+		            /* [wpacu_timing] */Misc::scriptExecTimer( $wpacuTimingName, 'end' );/* [/wpacu_timing] */
+		            return str_replace('<link ', '<link data-wpacu-skip-preload=\'1\' ', $htmlTag);
+	            }
+
+                $htmlTag = str_ireplace(
+                    array('<link ', 'rel=\'stylesheet\'', 'rel="stylesheet"', 'id=\'', 'id="'),
+                    array('<link rel=\'preload\' as=\'style\' data-wpacu-preload-it-async=\'1\' ', 'onload="this.onload=null;this.rel=\'stylesheet\'"', 'onload="this.onload=null;this.rel=\'stylesheet\'"', 'id=\'wpacu-preload-', 'id="wpacu-preload-'),
+                    $htmlTag
+                );
 	            /* [wpacu_timing] */Misc::scriptExecTimer( $wpacuTimingName, 'end' );/* [/wpacu_timing] */
-	            return str_replace('<link ', '<link data-wpacu-skip-preload=\'1\' ', $htmlTag);
+                return $htmlTag;
             }
 
 			ObjectCache::wpacu_cache_set($handle, 1, 'wpacu_basic_preload_handles');
@@ -601,5 +645,18 @@ class Preloads
         }
 
         return false;
+    }
+
+    /**
+     * This has to be triggered within actions such as 'init' or 'wp_head' (not directly)
+     *
+     * Conditions: Outside the admin area; Not in fetching the asset list mode
+     * Front-end optimization is triggered; not in "Test Mode" (with a non-admin visitor)
+     *
+     * @return bool
+     */
+    public static function triggerPreload()
+    {
+        return ! is_admin() && ! ( WPACU_GET_LOADED_ASSETS_ACTION === true || OptimizeCommon::preventAnyFrontendOptimization() || self::preventPreload() );
     }
 }

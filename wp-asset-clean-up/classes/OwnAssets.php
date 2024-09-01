@@ -1275,7 +1275,7 @@ HTML;
         $wpacuObjectData['wpacu_ajax_clear_cache_nonce']               = wp_create_nonce('wpacu_ajax_clear_cache_nonce');
         $wpacuObjectData['wpacu_ajax_preload_url_nonce']               = wp_create_nonce('wpacu_ajax_preload_url_nonce'); // After the CSS/JS manager's form is submitted (e.g. on an edit post/page)
 
-        if (SettingsAdminOnlyForAdmin::useAutoCompleteSearchForNonAdminUsersDd()) {
+        if (Menu::isPluginPage() === 'settings' && SettingsAdminOnlyForAdmin::useAutoCompleteSearchForNonAdminUsersDd()) {
             $wpacuObjectData['wpacu_search_non_admin_users_for_dd_nonce'] = wp_create_nonce('wpacu_search_non_admin_users_for_dd_nonce');
         }
 

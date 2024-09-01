@@ -57,6 +57,10 @@ class AssetsManager
 	 */
 	public function frontendShow()
 	{
+        if (is_admin()) {
+            return false; // Only relevant in the front-end view
+        }
+
 		// The option is disabled
 		if (! Main::instance()->settings['frontend_show']) {
 			return false;
@@ -105,7 +109,7 @@ class AssetsManager
 	 */
 	public static function currentUserCanViewAssetsList()
 	{
-        Main::instance()->settings = SettingsAdminOnlyForAdmin::getAnySpecifiedAdminsForAccessToAssetsManager(Main::instance()->settings);
+        Main::instance()->settings = SettingsAdminOnlyForAdmin::filterAnySpecifiedAdminsForAccessToAssetsManager(Main::instance()->settings);
 
         if ( Main::instance()->settings['allow_manage_assets_to'] === 'chosen' && ! empty(Main::instance()->settings['allow_manage_assets_to_list']) ) {
 			$wpacuCurrentUserId = get_current_user_id();

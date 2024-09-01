@@ -26,6 +26,9 @@ class Menu
 	public static $defaultAccessRole = 'administrator';
 
     /**
+     * This capability is assigned to non-admin users (the admins already have the "administrator" role that takes priority)
+     * so they would get access to the plugin's area
+     *
      * @var string
      */
     public static $pluginAccessCap = 'assetcleanup_manager';
@@ -258,12 +261,16 @@ class Menu
 		return false;
 	}
 
-	/**
-	 * @return bool
-	 */
-	public static function isPluginPage()
+    /**
+     * @return false|string
+     *
+     * If the page belongs to the plugin, it will return the actual page without the prefix which is: WPACU_PLUGIN_ID . '_'
+     */
+    public static function isPluginPage()
 	{
-		return isset($_GET['page']) && is_string($_GET['page']) && in_array($_GET['page'], self::$allMenuPages);
+		return isset($_GET['page']) && is_string($_GET['page']) && in_array($_GET['page'], self::$allMenuPages)
+            ? str_replace(WPACU_PLUGIN_ID . '_', '', sanitize_text_field($_GET['page']))
+            : false;
 	}
 
     /**

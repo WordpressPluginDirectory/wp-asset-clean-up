@@ -27,10 +27,9 @@ if ( ! isset($data, $assetType, $isAssetPreload) ) {
         <option <?php if ($isAssetPreload === 'basic') { ?>selected="selected"<?php } ?> value="basic">Yes, basic</option>
 
         <?php if ($assetType === 'styles') { ?>
-            <!-- [wpacu_lite] -->
-            <option disabled="disabled" value="async">Yes, async (Pro)</option>
-            <!-- [/wpacu_lite] -->
+            <option <?php if ($isAssetPreload === 'async') { ?>selected="selected"<?php } ?> value="async">Yes, async</option>
         <?php } ?>
+
     </select>
     <?php
     }

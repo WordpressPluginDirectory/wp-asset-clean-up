@@ -304,6 +304,7 @@ class Settings
 
     /**
      * Due to "current_user_can", this will be called within an early "init" action
+     *
      * @return void
      */
     public function filterSettingsOnAdminInit()
@@ -311,22 +312,7 @@ class Settings
         if (is_admin()) {
             $settings = Main::instance()->settings;
 
-            if (current_user_can(Menu::$defaultAccessRole)) {
-                $allowManageAssetsArray                          = SettingsAdminOnlyForAdmin::getAnySpecifiedAdminsForAccessToAssetsManager();
-                $nonAdminRolesArray                              = SettingsAdminOnlyForAdmin::getAllNonAdminUserRolesWithAnyPluginAccessCap();
-                $nonAdminsWithPluginAccessCap                    = SettingsAdminOnlyForAdmin::getSpecificNonAdminUsersIdsWithPluginAccessCap();
-
-                $settings['allow_manage_assets_to']              = $allowManageAssetsArray['allow_manage_assets_to'];
-                $settings['allow_manage_assets_to_list']         = $allowManageAssetsArray['allow_manage_assets_to_list'];
-                $settings['access_via_non_admin_user_roles']     = ! empty($nonAdminRolesArray['non_admin_role_slugs_with_cap']) ? $nonAdminRolesArray['non_admin_role_slugs_with_cap'] : array();
-                $settings['access_via_specific_non_admin_users'] = $nonAdminsWithPluginAccessCap;
-            } else {
-                // Non-admins have no business with these settings
-                $settings['allow_manage_assets_to']              = 'any_admin';
-                $settings['allow_manage_assets_to_list']         = array();
-                $settings['access_via_non_admin_user_roles']     = array();
-                $settings['access_via_specific_non_admin_users'] = array();
-            }
+            $settings = self::filterSpecialSettings($settings);
 
             Main::instance()->settings = $settings;
         }
@@ -606,29 +592,72 @@ class Settings
         // This will not triggered on the first getAll() call (very early, before other WordPress functions are set)
         // Instead, it will be triggered later on when the values below are relevant
         if (is_admin() && function_exists('wp_get_current_user')) {
-            if (current_user_can(Menu::$defaultAccessRole)) {
-                $allowManageAssetsArray                          = SettingsAdminOnlyForAdmin::getAnySpecifiedAdminsForAccessToAssetsManager();
-                $nonAdminRolesArray                              = SettingsAdminOnlyForAdmin::getAllNonAdminUserRolesWithAnyPluginAccessCap();
-                $nonAdminsWithPluginAccessCap                    = SettingsAdminOnlyForAdmin::getSpecificNonAdminUsersIdsWithPluginAccessCap();
+            $settings = self::filterSpecialSettings($settings);
+        }
 
-                $settings['allow_manage_assets_to']              = $allowManageAssetsArray['allow_manage_assets_to'];
-                $settings['allow_manage_assets_to_list']         = $allowManageAssetsArray['allow_manage_assets_to_list'];
-                $settings['access_via_non_admin_user_roles']     = ! empty($nonAdminRolesArray['non_admin_role_slugs_with_cap']) ? $nonAdminRolesArray['non_admin_role_slugs_with_cap'] : array();
-                $settings['access_via_specific_non_admin_users'] = $nonAdminsWithPluginAccessCap;
+        return $settings;
+	}
+
+    /**
+     * @param $settings
+     *
+     * @return mixed
+     */
+    public static function filterSpecialSettings($settings)
+    {
+        if (current_user_can(Menu::$defaultAccessRole)) {
+            if (self::triggerCssJsManagerCheck()) {
+                $allowManageAssetsArray                  = SettingsAdminOnlyForAdmin::filterAnySpecifiedAdminsForAccessToAssetsManager($settings);
+                $settings['allow_manage_assets_to']      = $allowManageAssetsArray['allow_manage_assets_to'];
+                $settings['allow_manage_assets_to_list'] = $allowManageAssetsArray['allow_manage_assets_to_list'];
 
                 // "only to the following administrator(s):" can not be empty; if that's the case, reset it to "any administrator"
                 if ($settings['allow_manage_assets_to'] === 'chosen' && empty($settings['allow_manage_assets_to_list'])) {
                     $settings['allow_manage_assets_to'] = 'any_admin';
                 }
-            } else {
-                // Non-admins have no business with these settings
-                $settings['allow_manage_assets_to']              = 'any_admin';
-                $settings['allow_manage_assets_to_list']         = array();
-                $settings['access_via_non_admin_user_roles']     = array();
-                $settings['access_via_specific_non_admin_users'] = array();
             }
+
+            if (Menu::isPluginPage() === 'settings') {
+                $nonAdminRolesArray           = SettingsAdminOnlyForAdmin::getAllNonAdminUserRolesWithAnyPluginAccessCap();
+                $nonAdminsWithPluginAccessCap = SettingsAdminOnlyForAdmin::getSpecificNonAdminUsersIdsWithPluginAccessCap();
+
+                $settings['access_via_non_admin_user_roles']     = ! empty($nonAdminRolesArray['non_admin_role_slugs_with_cap']) ? $nonAdminRolesArray['non_admin_role_slugs_with_cap'] : array();
+                $settings['access_via_specific_non_admin_users'] = $nonAdminsWithPluginAccessCap;
+            }
+        } else {
+            // Non-admins have no business with these settings
+            $settings['allow_manage_assets_to']              = 'any_admin';
+            $settings['allow_manage_assets_to_list']         = array();
+            $settings['access_via_non_admin_user_roles']     = array();
+            $settings['access_via_specific_non_admin_users'] = array();
         }
 
         return $settings;
-	}
+    }
+
+    /**
+     * This will return true:
+     *
+     * 1) In the "Settings" page
+     * 2) In pages where the CSS/JS manager will show up
+     * 3) In pages where the link to the CSS/JS manager will be printed such as a list of posts
+     *
+     * @return bool
+     */
+    public static function triggerCssJsManagerCheck()
+    {
+        if ( isset($_SERVER['REQUEST_URI']) &&
+            ( strpos($_SERVER['REQUEST_URI'], '/edit.php') !== false ||
+              strpos($_SERVER['REQUEST_URI'], '/post.php?post=') !== false ||
+              strpos($_SERVER['REQUEST_URI'], 'term.php?taxonomy=') !== false
+            ) ) {
+            return true;
+        }
+
+        if ( Menu::isPluginPage() || ( ! is_admin() && AssetsManager::instance()->frontendShow() ) ) {
+            return true;
+        }
+
+        return false;
+    }
 }

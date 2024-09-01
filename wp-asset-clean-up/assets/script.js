@@ -638,7 +638,7 @@
                     }
 
                     if ($('#wpacu_dash_assets_manager_form').length > 0) {
-                        $('#submit').show();
+                        $('#wpacu-update-button-area .submit input').removeClass('hidden');
                     }
 
                     setTimeout(function () {
@@ -756,7 +756,7 @@
                         $(metaBoxContent).html(response);
 
                         if ($('#wpacu_dash_assets_manager_form').length > 0) {
-                            $('#submit').show();
+                            $('#wpacu-update-button-area .submit input').removeClass('hidden');
                         }
 
                         setTimeout(function () {

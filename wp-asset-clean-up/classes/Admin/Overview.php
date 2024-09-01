@@ -495,6 +495,10 @@ SQL;
                 <?php
             }
 
+            // If called from "Bulk Changes" -> "Preloads"
+            $preloadedStatus = isset($data['assets_info'][ $assetType ][ $handle ]['preloaded_status']) ? $data['assets_info'][ $assetType ][ $handle ]['preloaded_status'] : false;
+            if ($preloadedStatus === 'async') { echo '&nbsp;(<strong><em>'.$preloadedStatus.'</em></strong>)'; }
+
             $handleExtras = array();
 
             // If called from "Overview"
