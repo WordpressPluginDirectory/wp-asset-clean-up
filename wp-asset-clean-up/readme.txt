@@ -3,8 +3,8 @@ Contributors: gabelivan
 Tags: minify css, minify javascript, defer css javascript, page speed, dequeue
 Donate link: https://www.gabelivan.com/items/wp-asset-cleanup-pro/?utm_source=wp_org_lite&utm_medium=donate
 Requires at least: 4.6
-Tested up to: 6.6.1
-Stable tag: 1.3.9.7
+Tested up to: 6.7.1
+Stable tag: 1.4.0.1
 Requires PHP: 5.6
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl.html
@@ -192,6 +192,25 @@ With the recently released "Test Mode" feature, you can safely unload assets on 
 4. Homepage CSS & JS Management (List sorted by location)
 
 == Changelog ==
+= 1.4.0.1 =
+* New Feature For The Admin: "Settings" -- "Plugin Usage Preferences" -- "Announcements" / The admin would be notified within the Dashboard (if he/she prefers) of critical updates, new features, usage tips, special offers / read more: https://www.assetcleanup.com/docs/?p=1946
+* Make sure plugin generated STYLE/SCRIPT inline tags (e.g. from features such as "Inline CSS") have the "type" attribute (unless the theme supports HTML5) / read more: https://www.assetcleanup.com/docs/?p=2086
+* Moved "CSS/JS Cache" tab into the "CSS/JS Manager" one and grouped options within the 'CSS/JS Manager' (for better readability)
+* Fix / Notice: "Function _load_textdomain_just_in_time was called incorrectly. Translation loading for the 'wp-asset-clean-up' domain was triggered too early."
+
+= 1.4 =
+* Fix - Error message: Uncaught TypeError: in_array(): Argument #2 ($haystack) must be of type array, string given in [...]/templates/_admin-page-settings-plugin-areas/_plugin-usage-settings/_access.php:43
+* Fix - PHP Deprecated: trim(): Passing null to parameter #1 ($string) of type string is deprecated in [...]/classes/OptimiseAssets/OptimizeCommon.php on line 903
+* Fix - PHP Warning: Undefined global variable $wpassetcleanup_external_srcs_ref
+* Updated the external links to the help pages
+
+= 1.3.9.9 =
+* Fix: Server Side Request Forgery (SSRF) has been discovered on an AJAX call within the CSS/JS manager; New parameters were added to the call to avoid any unsanitized input
+
+= 1.3.9.8 =
+* Fix: Avoid deprecated PHP notice if PHP version >= 8.1; A "null" parameter was passed to the native WordPress function add_submenu_page(), instead of an empty string ''
+* Fix: When using Query Monitor, the "Update" button from the CSS/JS manager was showing up on top of the bottom Query Monitor data
+
 = 1.3.9.7 =
 * CSS assets can now be preloaded (via the CSS/JS manager) in an async way as well * <a target="_blank" href="https://www.assetcleanup.com/docs/?p=202#preload-async-css">Read more</a>
 * Reduce the total number of SQL queries used to obtain information

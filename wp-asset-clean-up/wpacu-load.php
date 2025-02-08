@@ -35,8 +35,15 @@ spl_autoload_register('includeWpAssetCleanUpClassesAutoload');
 \WpAssetCleanUp\ObjectCache::wpacu_cache_init();
 
 if (isset($GLOBALS['wpacu_object_cache'])) {
-	$wpacu_object_cache = $GLOBALS['wpacu_object_cache']; // just in case
+    $wpacu_object_cache = $GLOBALS['wpacu_object_cache']; // just in case
 }
+
+// Menu
+add_action('init', function() {
+    if (is_admin()) {
+        new \WpAssetCleanUp\Menu;
+    }
+});
 
 // Main Class (common code for both the front-end and /wp-admin/ views)
 \WpAssetCleanUp\Main::instance();
@@ -59,13 +66,6 @@ if (is_admin()) {
 if ( ! is_admin() ) {
     \WpAssetCleanUp\MainFront::instance();
 }
-
-// Menu
-add_action('init', function() {
-    if (is_admin()) {
-        new \WpAssetCleanUp\Menu;
-    }
-});
 
 $wpacuSettingsClass = new \WpAssetCleanUp\Settings();
 
@@ -146,6 +146,9 @@ if (is_admin()) {
 	 */
 	$wpacuPlugin = new \WpAssetCleanUp\Admin\Plugin;
 	$wpacuPlugin->init();
+
+    $adminPluginAnnouncementsClass = new \WpAssetCleanUp\Admin\PluginAnnouncements();
+    $adminPluginAnnouncementsClass->init();
 
 	new \WpAssetCleanUp\Admin\PluginReview();
 

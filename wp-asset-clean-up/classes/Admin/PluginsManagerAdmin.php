@@ -1,14 +1,11 @@
 <?php
-namespace WpAssetCleanUp;
-
-use WpAssetCleanUp\Admin\MainAdmin;
-use WpAssetCleanUp\Admin\MiscAdmin;
+namespace WpAssetCleanUp\Admin;
 
 /**
  * Class PluginsManager
  * @package WpAssetCleanUp
  */
-class PluginsManager
+class PluginsManagerAdmin
 {
     /**
      * @var array

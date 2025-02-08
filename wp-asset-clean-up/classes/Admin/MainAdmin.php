@@ -43,6 +43,15 @@ class MainAdmin
 	}
 
     /**
+     * Admin notices at the top of the Dashboard could be for annoucements, to ask the admin to allow analytics
+     * Only show one notice at a time, never both to avoid annoying the admin
+     * This will work only if both notices are shown the 'regular' way (no AJAX), otherwise, other measure were taken through the JavaScript code
+     *
+     * @var bool
+     */
+    private static $topAdminNoticeDisplayed = false;
+
+    /**
      * For these handles, it's strongly recommended to use 'Ignore dependency rule and keep the "children" loaded'
      * if any of them are unloaded in any page
      *
@@ -112,6 +121,41 @@ class MainAdmin
         }
 
 	    $this->wpacuHtmlNoticeForAdmin();
+
+        // Fix: When using Query Monitor, the "Update" button from the CSS/JS manager was showing up on top of the bottom Query Monitor data
+        if (Menu::isPluginPage() === 'assets_manager' && wpacuIsPluginActive('query-monitor/query-monitor.php')) {
+            add_action('admin_head', static function() {
+                ?>
+                <style>
+                    #query-monitor-main {
+                        z-index: 1000000 !important;
+                    }
+                </style>
+                <?php
+            });
+        }
+    }
+
+    /**
+     * This is to avoid showing two notices such as "tracking" and "reviewing", to avoid annoying the admin
+     *
+     * Check if a notice has been displayed
+     *
+     * @return bool
+     */
+    public static function isTopAdminNoticeDisplayed()
+    {
+        return self::$topAdminNoticeDisplayed;
+    }
+
+    /**
+     * Mark that a notice has been displayed
+     *
+     * @return void
+     */
+    public static function setTopAdminNoticeDisplayed()
+    {
+        self::$topAdminNoticeDisplayed = true;
     }
 
     /**
@@ -304,14 +348,15 @@ class MainAdmin
                 $htmlSource .= ob_get_clean();
             }
 
-            $anyHardCodedAssets = HardcodedAssets::getAll($htmlSource); // Fetch all for this type of request
+            $anyHardCodedAssets = HardcodedAssets::getAll($htmlSource, false); // Fetch all for this type of request
+            if ( ! empty($anyHardCodedAssets) && Main::instance()->isAjaxCall ) {
+                HardcodedAssets::attachExternalHardcodedAssetsUrlsToCurrentExternalUrlsList($anyHardCodedAssets);
+            }
 
-            $reps = array(
-                '{wpacu_hardcoded_assets}' => $anyHardCodedAssets
-            );
+            $reps = array('{wpacu_hardcoded_assets}' => base64_encode( wp_json_encode( $anyHardCodedAssets ) ));
 
             if ( isset($_GET['wpacu_print']) ) {
-                $anyHardCodedAssetsPrinted = print_r(HardcodedAssets::getAll($htmlSource, false), true);
+                $anyHardCodedAssetsPrinted = print_r($anyHardCodedAssets, true);
                 $reps['{wpacu_hardcoded_assets_printed}'] = $anyHardCodedAssetsPrinted;
             }
 
@@ -338,8 +383,8 @@ class MainAdmin
         ob_start();
 
         add_action('shutdown', static function() {
-            if (! defined('SMARTSLIDER3_LIBRARY_PATH')) {
-                ob_flush();
+            if (ob_get_level() > 1) {
+                ob_end_flush();
             }
 
             $htmlSource = '';
@@ -917,6 +962,8 @@ class MainAdmin
 
             $data['ignore_child'] = Main::instance()->getIgnoreChildren();
 
+            $data['external_srcs_ref'] = AssetsManager::setExternalSrcsRef($data['all']);
+
             switch (assetCleanUpHasNoLoadMatches($data['fetch_url'])) {
                 case 'is_set_in_settings':
                     // The rules from "Settings" -> "Plugin Usage Preferences" -> "Do not load the plugin on certain pages" will be checked
@@ -957,6 +1004,10 @@ class MainAdmin
 
             $list['styles']  = $data['all']['styles'];
             $list['scripts'] = $data['all']['scripts'];
+
+            if ( (Main::$domGetType === 'direct' && Main::instance()->isAjaxCall) || Main::$domGetType === 'wp_remote_post' ) {
+                $list['external_srcs_ref'] = AssetsManager::setExternalSrcsRef($data['all']);
+            }
 
             // e.g. for "Loaded" and "Unloaded" statuses
             $list['current_unloaded_all'] = isset(Main::instance()->allUnloadedAssets)
@@ -1139,6 +1190,13 @@ class MainAdmin
 
 		// e.g. for "Loaded" and "Unloaded" statuses
 		$data['current_unloaded_all'] = isset($data['all']['current_unloaded_all']) ? (array)$data['all']['current_unloaded_all'] : array('styles' => array(), 'scripts' => array());
+
+        $data['external_srcs_ref'] = '';
+
+        // Any external sources?
+        if ( isset($data['all']['external_srcs_ref']) && $data['all']['external_srcs_ref'] ) {
+            $data['external_srcs_ref'] = $data['all']['external_srcs_ref'];
+        }
 
         if ($data['plugin_settings']['assets_list_layout'] === 'by-location') {
 			$data['all'] = Sorting::appendLocation($data['all']);
